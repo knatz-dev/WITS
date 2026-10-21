@@ -79,12 +79,27 @@ encoding. Previously issued tokens using non-ASCII keys need to be reissued
 because older code used ASCII encoding. Restart after changing JWT or database
 settings.
 
+## Error responses
+
+Every expected failure answers with `application/problem+json` carrying `status`,
+`title`, and `detail`:
+
+- Unreadable or invalid input → **400** (`Bad Request`), including malformed
+  request bodies, which the framework otherwise ends with an empty 400.
+- Missing or invalid bearer token → **401** (`Unauthorized`), keeping
+  `WWW-Authenticate`; rejected login credentials answer the same way.
+- Authenticated but disallowed → **403** (`Forbidden`).
+- Unknown resource → **404** (`Not Found`).
+- Duplicate registration → **409** (`Conflict`).
+- Anything unhandled → **500** (`Internal Server Error`) with only a `traceId`;
+  the exception is logged server-side and never included in the response.
+
 ## Verification
 
 ```sh
 dotnet run --project tests/WITS.Api.SmokeTests
 ```
 
-This executable smoke check covers startup validation, DI, and database targeting with isolated
+This executable smoke check covers startup validation, error responses, DI, and database targeting with isolated
 fixtures. See [its README](tests/WITS.Api.SmokeTests/README.md) for scope. Run it
 explicitly; `dotnet test` does not execute it.

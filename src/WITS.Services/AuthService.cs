@@ -21,7 +21,7 @@ using static WITS.Services.IAuthService;
 namespace WITS.Services;
 
 public record CredentialResult(bool Success, string? Token, string Message = "");
-public record RegistrationResult(bool Success, string Message = "");
+public record RegistrationResult(bool Success, string Message = "", bool Conflict = false);
 
 public interface IAuthService
 {
@@ -138,7 +138,7 @@ public class AuthService : IAuthService
         var existing = await _userRepository.QueryAsync(filter);
         if (existing.Items.Any())
         {
-            return new RegistrationResult(false, "Username already exists");
+            return new RegistrationResult(false, "Username already exists", Conflict: true);
         }
 
         // Hash password with salt

@@ -12,6 +12,8 @@ Startup-validation checks cover missing/blank issuer, audience and signing key, 
 
 Repository checks use real SQLite to verify that `GetAllAsync` preserves empty-page metadata and returns active rows/counts, while connection-open, missing-table, and row-mapping failures propagate to callers. These checks target the repository directly; ticket-service HTTP integration is still unimplemented.
 
+Error-response checks run the API in `Production` and require `application/problem+json` bodies carrying `status`, `title`, and `detail` for every expected failure: an unauthenticated request (keeping `WWW-Authenticate`), rejected credentials, duplicate registration (409), registration validation (400), a missing ticket (404), an unreadable request body, an authorization refusal, and an unhandled service exception. The unhandled case must also stay free of exception and stack-trace content. Ticket lookup and registration are exercised with stubbed services because the real services need a schema and working credentials.
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.
@@ -22,4 +24,4 @@ It also runs the real migrator and seeder against temporary SQLite files and che
 
 The seeder check verifies the file it opens, not successful data insertion. The migration-application check verifies history-table bootstrap on the selected file; the existing count-cast defect still blocks up-scripts. A synthetic history row exercises rollback independently. These known defects remain separate checklist items.
 
-Run this explicitly; it is not a `dotnet test` project. Temporary databases and environment JSON fixtures are removed after the run. Registration/login and production data/filesystem permissions are not exercised.
+Run this explicitly; it is not a `dotnet test` project. Temporary databases and environment JSON fixtures are removed after the run. Real credential storage, password verification, ticket-service behavior, and production data/filesystem permissions are not exercised.

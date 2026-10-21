@@ -31,11 +31,15 @@ public class Routes : IEndpointDefinition
         return ticket != null ? TypedResults.Ok(ticket) : TypedResults.NoContent();
     }
 
-    private static async Task<Results<Ok<Ticket>, NotFound>> GetByIdHandler(
+    private static async Task<Results<Ok<Ticket>, ProblemHttpResult>> GetByIdHandler(
         ITicketService ticketService, long id)
     {
         var ticket = await ticketService.GetByIdAsync(id);
-        return ticket != null ? TypedResults.Ok(ticket) : TypedResults.NotFound();
+        if (ticket == null)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound($"Ticket {id} does not exist."));
+        }
+        return TypedResults.Ok(ticket);
     }
 
     private static async Task<Results<Ok<PagedResult<Ticket>>, NoContent>> GetAllHandler(

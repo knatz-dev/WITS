@@ -23,24 +23,26 @@ public class Routes : IEndpointDefinition
             .AllowAnonymous();
     }
 
-    private static async Task<Results<Ok<LoginResponse>, BadRequest<string>>> LoginHandler(
+    private static async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> LoginHandler(
         IAuthService authService, [FromBody] LoginRequest request)
     {
         var credentialResult = await authService.ValidateCredentialsAsync(request.Username, request.Password);
         if (!credentialResult.Success)
         {
-            return TypedResults.BadRequest("Invalid credentials");
+            return TypedResults.Problem(ApiErrors.Unauthorized("Invalid credentials"));
         }
         return TypedResults.Ok(new LoginResponse(credentialResult.Token, credentialResult.Message));
     }
 
-    private static async Task<Results<Ok<string>, BadRequest<string>>> RegisterHandler(
+    private static async Task<Results<Ok<string>, ProblemHttpResult>> RegisterHandler(
         IAuthService authService, [FromBody] RegisterRequest request)
     {
         var result = await authService.RegisterUserAsync(request);
         if (!result.Success)
         {
-            return TypedResults.BadRequest(result.Message);
+            return result.Conflict
+                ? TypedResults.Problem(ApiErrors.Conflict(result.Message))
+                : TypedResults.Problem(ApiErrors.Validation(result.Message));
         }
         return TypedResults.Ok(result.Message);
     }

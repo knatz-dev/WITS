@@ -58,6 +58,7 @@ if (ReferenceEquals(unitOfWork, otherScope.ServiceProvider.GetRequiredService<IU
 
 Console.WriteLine("PASS: API startup, configured SQLite factory, service resolution, and scoped unit of work.");
 
+await ErrorResponseChecks.RunAsync();
 await RepositoryFailureChecks.RunAsync();
 await StartupConfigurationChecks.RunAsync();
 await DatabaseTargetChecks.RunAsync();

@@ -13,6 +13,7 @@ using WITS.Data.Repository;
 using WITS.Common;
 using WITS.Api.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -22,6 +23,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 // Configure JWT Authentication
 builder.Services.AddOptions<JwtSettings>()
@@ -54,7 +56,29 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(jwtSettings.SecurityKey))
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.HttpContext.Response.Headers.WWWAuthenticate = "Bearer";
+                await WriteProblemAsync(context.HttpContext, ApiErrors.Unauthorized("Authentication is required to access this resource."));
+            },
+            OnForbidden = async context =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await WriteProblemAsync(context.HttpContext, ApiErrors.Forbidden("You do not have permission to access this resource."));
+            }
+        };
     });
+
+static async Task WriteProblemAsync(HttpContext context, ProblemDetails problem)
+{
+    await context.RequestServices.GetRequiredService<IProblemDetailsService>()
+        .WriteAsync(new ProblemDetailsContext { HttpContext = context, ProblemDetails = problem });
+}
 
 builder.Services.AddAuthorization();
 
@@ -79,6 +103,18 @@ await DatabaseConfiguration.ValidateAccessAsync(app.Services.GetRequiredService<
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
+
+// Minimal-API binding failures end the request with a bare 400, so give them the shared problem shape.
+app.Use(async (context, next) =>
+{
+    await next(context);
+    if (context.Response.StatusCode == StatusCodes.Status400BadRequest
+        && !context.Response.HasStarted
+        && string.IsNullOrEmpty(context.Response.ContentType))
+    {
+        await WriteProblemAsync(context, ApiErrors.Validation("The request could not be read. Check the body format and supplied values."));
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
