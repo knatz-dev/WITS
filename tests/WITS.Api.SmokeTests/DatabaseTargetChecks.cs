@@ -193,7 +193,11 @@ internal static class DatabaseTargetChecks
     }
 
     private static string ConnectionString(string target) => new SqliteConnectionStringBuilder { DataSource = target, Pooling = false }.ToString();
-    private static string Settings(string target) => JsonSerializer.Serialize(new { ConnectionStrings = new { DefaultConnection = ConnectionString(target) } });
+    private static string Settings(string target) => JsonSerializer.Serialize(new
+    {
+        ConnectionStrings = new { DefaultConnection = ConnectionString(target) },
+        JwtSettings = new { SecurityKey = StartupConfigurationChecks.SigningKey }
+    });
     private static void Require(bool condition, string message)
     {
         if (!condition)

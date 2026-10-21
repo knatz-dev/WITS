@@ -59,12 +59,32 @@ the working directory; run `create`/`remove` from `tools/WITS.Migrator`.
 check defect, and seeding has transaction/schema defects. Database selection is
 verified; successful schema setup and seed insertion remain incomplete.
 
+## Startup validation
+
+Before serving requests, the API checks:
+
+- `JwtSettings:Issuer` and `JwtSettings:Audience` are nonblank.
+- `JwtSettings:SecurityKey` is nonblank and at least **32 UTF-8 bytes** for HS256.
+- The sample signing key is rejected outside `Development`. Supply a randomly
+  generated deployment key through `JwtSettings__SecurityKey` or your secret store.
+- `JwtSettings:ExpirationMinutes` is a positive integer.
+- The configured SQLite database can be opened and written, including access to
+  its journal directory. A metadata write is rolled back; existing data, schema,
+  and metadata are preserved. A missing database may be created if the configured
+  SQLite mode permits it. This does not create or validate the application schema.
+
+Invalid settings stop startup and identify the configuration key to correct.
+Token signing and verification use the same validated settings and UTF-8 key
+encoding. Previously issued tokens using non-ASCII keys need to be reissued
+because older code used ASCII encoding. Restart after changing JWT or database
+settings.
+
 ## Verification
 
 ```sh
 dotnet run --project tests/WITS.Api.SmokeTests
 ```
 
-This executable smoke check covers startup, DI, and database targeting with isolated
+This executable smoke check covers startup validation, DI, and database targeting with isolated
 fixtures. See [its README](tests/WITS.Api.SmokeTests/README.md) for scope. Run it
 explicitly; `dotnet test` does not execute it.

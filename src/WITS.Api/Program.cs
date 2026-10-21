@@ -14,6 +14,7 @@ using WITS.Common;
 using WITS.Api.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -23,22 +24,24 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 
 // Configure JWT Authentication
-builder.Services.Configure<JwtSettings>(
-    builder.Configuration.GetSection(nameof(JwtSettings))
-);
+builder.Services.AddOptions<JwtSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(JwtSettings)))
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.Issuer), "JwtSettings:Issuer must not be blank.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.Audience), "JwtSettings:Audience must not be blank.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.SecurityKey)
+        && Encoding.UTF8.GetByteCount(settings.SecurityKey) >= 32,
+        "JwtSettings:SecurityKey must contain at least 32 UTF-8 bytes for HS256.")
+    .Validate(settings => builder.Environment.IsDevelopment()
+        || settings.SecurityKey != "YourLongSecretKeyHere_Replace_In_Production",
+        "JwtSettings:SecurityKey must replace the sample key outside Development.")
+    .Validate(settings => settings.ExpirationMinutes > 0, "JwtSettings:ExpirationMinutes must be positive.")
+    .ValidateOnStart();
 
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtSettings>>((options, settings) =>
     {
-        JwtSettings? jwtSettings = builder.Configuration
-                                          .GetSection(nameof(JwtSettings))
-                                          .Get<JwtSettings>();
-
-        if (jwtSettings is null)
-        {
-            throw new InvalidOperationException("JWT settings are not configured properly.");
-        }
+        var jwtSettings = settings.Value;
 
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -49,7 +52,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtSettings.Issuer,
             ValidAudience = jwtSettings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.ASCII.GetBytes(jwtSettings.SecurityKey))
+                Encoding.UTF8.GetBytes(jwtSettings.SecurityKey))
         };
     });
 
@@ -71,7 +74,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 
 WebApplication app = builder.Build();
-_ = app.Services.GetRequiredService<IDbConnectionFactory>();
+_ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;
+await DatabaseConfiguration.ValidateAccessAsync(app.Services.GetRequiredService<IDbConnectionFactory>());
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();

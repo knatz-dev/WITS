@@ -44,7 +44,7 @@ public class AuthService : IAuthService
     public string GenerateToken(UserTokenModel userToken)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(_jwtSettings.SecurityKey);
+        var key = Encoding.UTF8.GetBytes(_jwtSettings.SecurityKey);
 
         var claims = new List<Claim>
         {
