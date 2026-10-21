@@ -109,6 +109,21 @@ seeder's placeholder hashes fail verification and those accounts need a password
 reset once the recovery flow exists. Unrecognized or damaged stored values fail
 closed with `false` instead of throwing.
 
+## Token claims
+
+Access tokens identify an account with:
+
+- `nameid` (`ClaimTypes.NameIdentifier`) — the stable user ID; this is the
+  subject. Never identify an account by display name.
+- `name` (`ClaimTypes.Name`) — the username.
+- `email` (`ClaimTypes.Email`) — the account's address.
+- `OrganisationId` — the account's organisation, spelled as in the API's
+  organisation models.
+
+No role claim is issued. Roles must come from granted role assignments, which
+nothing reads yet (checklist: role/permission evaluation), so authorization
+today depends only on a valid identity.
+
 ## Verification
 
 ```sh

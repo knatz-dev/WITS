@@ -98,7 +98,8 @@ internal static class StartupConfigurationChecks
             using var scope = application.Services.CreateScope();
             var token = scope.ServiceProvider.GetRequiredService<IAuthService>().GenerateToken(new UserTokenModel
             {
-                Username = "smoke", EmailAddress = "smoke@example.com", FullName = "Smoke Test", OrganisationId = 1
+                Id = 1,
+                Username = "smoke", EmailAddress = "smoke@example.com", OrganisationId = 1
             });
             var parameters = application.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
                 .Get(JwtBearerDefaults.AuthenticationScheme).TokenValidationParameters.Clone();

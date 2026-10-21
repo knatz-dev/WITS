@@ -29,8 +29,8 @@ public class RegisterRequest
 
 public class UserTokenModel
 {
+    public required long Id { get; set; }
     public required string Username { get; set; }
     public required string EmailAddress { get; set; }
-    public required string FullName { get; set; }
     public int OrganisationId { get; set; }
 }

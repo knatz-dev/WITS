@@ -46,12 +46,13 @@ public class AuthService : IAuthService
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(_jwtSettings.SecurityKey);
 
+        // Roles are deliberately absent: they must come from granted role assignments, never from display names.
         var claims = new List<Claim>
         {
+            new(ClaimTypes.NameIdentifier, userToken.Id.ToString()),
             new(ClaimTypes.Name, userToken.Username),
             new(ClaimTypes.Email, userToken.EmailAddress),
-            new(ClaimTypes.Role, userToken.FullName.ToString()),
-            new("OrganizationId", userToken.OrganisationId.ToString())
+            new("OrganisationId", userToken.OrganisationId.ToString())
         };
 
         var tokenDescriptor = new SecurityTokenDescriptor
@@ -113,9 +114,9 @@ public class AuthService : IAuthService
         // Generate token if credentials are valid
         var token = GenerateToken(new UserTokenModel()
         {
+            Id = user.Id,
             Username = username,
             EmailAddress = user.EmailAddress,
-            FullName = user.FullName,
             OrganisationId = user.OrganisationId,
         });
 

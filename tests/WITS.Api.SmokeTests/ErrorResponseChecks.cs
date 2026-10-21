@@ -124,9 +124,9 @@ internal static class ErrorResponseChecks
         using var scope = host.Services.CreateScope();
         return scope.ServiceProvider.GetRequiredService<IAuthService>().GenerateToken(new UserTokenModel
         {
+            Id = 1,
             Username = "smoke",
             EmailAddress = "smoke@example.com",
-            FullName = "Smoke Test",
             OrganisationId = 1
         });
     }

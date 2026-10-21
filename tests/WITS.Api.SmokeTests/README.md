@@ -16,6 +16,8 @@ Error-response checks run the API in `Production` and require `application/probl
 
 Password-storage checks assert that a freshly hashed password round-trips, that a wrong or empty password and a missing salt fail, that each password gets its own salt, that a stored hash records a real work factor and verification derives with exactly that cost, and that fourteen damaged/legacy stored values (unstructured text, legacy HMAC pairs, bad cost fields, bad Base64, truncated payloads) fail closed instead of throwing.
 
+Identity checks run real credential validation against a stubbed account and require the issued token to authenticate, resolve `name` to the username, carry `ClaimTypes.NameIdentifier` subject `42`, the account email, and an `OrganisationId` claim using organisation naming — with no role claim, no display-name value anywhere in the token, and no token for a wrong password.
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.
