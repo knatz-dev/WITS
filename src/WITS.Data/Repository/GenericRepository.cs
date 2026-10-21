@@ -75,34 +75,27 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<PagedResult<T>> GetAllAsync(int pageNumber = 1, int pageSize = 100)
     {
-        try
-        {
-            using var connection = await _connectionFactory.CreateConnectionAsync();
+        using var connection = await _connectionFactory.CreateConnectionAsync();
 
-            var totalQuery = $"SELECT COUNT(*) FROM {_tableName} WHERE IsDeleted = 0";
-            var totalRecords = await connection.ExecuteScalarAsync<int>(totalQuery, _transaction);
+        var totalQuery = $"SELECT COUNT(*) FROM {_tableName} WHERE IsDeleted = 0";
+        var totalRecords = await connection.ExecuteScalarAsync<int>(totalQuery, _transaction);
 
-            var offset = (pageNumber - 1) * pageSize;
+        var offset = (pageNumber - 1) * pageSize;
 
-            var query = $"""
-                         SELECT * FROM {_tableName}
-                         WHERE IsDeleted = 0
-                         ORDER BY {_primaryKeyColumn}
-                         LIMIT @PageSize OFFSET @Offset
-                         """;
+        var query = $"""
+                     SELECT * FROM {_tableName}
+                     WHERE IsDeleted = 0
+                     ORDER BY {_primaryKeyColumn}
+                     LIMIT @PageSize OFFSET @Offset
+                     """;
 
-            var parameters = new DynamicParameters();
-            parameters.Add("@Offset", offset);
-            parameters.Add("@PageSize", pageSize);
+        var parameters = new DynamicParameters();
+        parameters.Add("@Offset", offset);
+        parameters.Add("@PageSize", pageSize);
 
-            var items = (await connection.QueryAsync<T>(query, parameters, _transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(query, parameters, _transaction)).ToList();
 
-            return new PagedResult<T>(items, totalRecords, pageNumber, pageSize);
-        }
-        catch
-        {
-            return new PagedResult<T>(Array.Empty<T>(), 0, pageNumber, pageSize);
-        }
+        return new PagedResult<T>(items, totalRecords, pageNumber, pageSize);
     }
 
     public async Task<PagedResult<T>> QueryAsync(GenericFilter filter)

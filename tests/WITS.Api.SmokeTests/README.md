@@ -10,6 +10,8 @@ This executable check starts the real API with in-memory SQLite, requests a prot
 
 Startup-validation checks cover missing/blank issuer, audience and signing key, undersized keys, non-development sample keys, nonpositive/malformed token lifetimes, and invalid database configuration. Real-host checks reject read-only, missing (`Mode=ReadWrite`), corrupt, and unusable-directory database targets before any request is sent. A successful startup preserves a fixture's schema, data, and `user_version`. Boundary-length ASCII/UTF-8 keys issue tokens that validate against both the actual bearer settings and the expected UTF-8 signing key.
 
+Repository checks use real SQLite to verify that `GetAllAsync` preserves empty-page metadata and returns active rows/counts, while connection-open, missing-table, and row-mapping failures propagate to callers. These checks target the repository directly; ticket-service HTTP integration is still unimplemented.
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.
