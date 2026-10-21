@@ -277,7 +277,7 @@ namespace WITS.Migrator
         /// </summary>
         /// <param name="connectionString">Database connection string</param>
         /// <returns>Exit code (0 for success, non-zero for failure)</returns>
-        public static int Migrate()
+        public int Migrate()
         {
             var migrations = GetMigrations();
             if (!migrations.Any())
@@ -297,7 +297,7 @@ namespace WITS.Migrator
                 try
                 {
                     AnsiConsole.MarkupLine($"Applying migration: [blue]{migration.Name}[/]");
-                    migration.Apply();
+                    migration.Apply(_connectionString);
                     table.AddRow(migration.MigrationId, migration.Name, "[green]Applied[/]");
                 }
                 catch (Exception ex)
@@ -401,7 +401,7 @@ namespace WITS.Migrator
         /// </summary>
         /// <param name="parameters">Command parameters containing migration ID</param>
         /// <returns>Exit code (0 for success, non-zero for failure)</returns>
-        public static int Rollback(string[] parameters)
+        public int Rollback(string[] parameters)
         {
             if (parameters.Length < 1)
             {
@@ -422,7 +422,7 @@ namespace WITS.Migrator
             try
             {
                 AnsiConsole.MarkupLine($"Rolling back migration: [blue]{migration.Name}[/]");
-                migration.Rollback();
+                migration.Rollback(_connectionString);
                 AnsiConsole.MarkupLine("[green]Migration rolled back successfully[/]");
             }
             catch (Exception ex)

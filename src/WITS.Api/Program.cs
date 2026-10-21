@@ -13,6 +13,7 @@ using WITS.Data.Repository;
 using WITS.Common;
 using WITS.Api.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.Sqlite;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -57,15 +58,20 @@ builder.Services.AddAuthorization();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.Services.AddScoped<IDbConnectionFactory>(services => new SQliteConnectionFactory(
-    services.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("The connection string 'DefaultConnection' is not configured.")));
+builder.Services.AddSingleton<IDbConnectionFactory>(services =>
+{
+    var connectionString = DatabaseConfiguration.GetConnectionString(services.GetRequiredService<IConfiguration>());
+    services.GetRequiredService<ILogger<SQliteConnectionFactory>>()
+        .LogInformation("Database: {DatabasePath}", new SqliteConnectionStringBuilder(connectionString).DataSource);
+    return new SQliteConnectionFactory(connectionString);
+});
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 
 WebApplication app = builder.Build();
+_ = app.Services.GetRequiredService<IDbConnectionFactory>();
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();

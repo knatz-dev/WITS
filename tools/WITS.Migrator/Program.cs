@@ -1,47 +1,32 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Data.Sqlite;
 using Spectre.Console;
+using WITS.Data;
 using WITS.Migrator;
 
 try
 {
-    // Load configuration from various sources
-    var config = new ConfigurationBuilder()
-        .SetBasePath(Directory.GetCurrentDirectory())
-        .AddJsonFile("appsettings.json", optional: false)
-        .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
-        .AddEnvironmentVariables()
-        .AddCommandLine(args)
-        .Build();
-
-    // Get database connection string from configuration
-    var connectionString = config.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("DefaultConnection not found in configuration");
-
-    // Ensure database directory exists
-    var dbPath = Path.GetDirectoryName(connectionString.Split('=')[1]);
-    if (!string.IsNullOrEmpty(dbPath) && !Directory.Exists(dbPath))
-    {
-        Directory.CreateDirectory(dbPath);
-    }
-
-
-    // Initialize the migrator
-    Migrator migrator = new Migrator(connectionString);
-
-    // Parse command-line arguments
     if (args.Length == 0)
     {
         Migrator.ShowHelp();
         return 0;
     }
 
-    var command = args[0].ToLower();
-    var parameters = args.Skip(1).ToArray();
+    // Keep positional migration arguments out of the configuration provider.
+    var optionIndex = Array.FindIndex(args, arg => arg.StartsWith("--", StringComparison.Ordinal));
+    var commandArgs = optionIndex < 0 ? args : args[..optionIndex];
+    var configurationArgs = optionIndex < 0 ? Array.Empty<string>() : args[optionIndex..];
+    using var config = DatabaseConfiguration.LoadToolConfiguration(configurationArgs);
+    var connectionString = DatabaseConfiguration.GetConnectionString(config);
+    Console.WriteLine($"Database: {new SqliteConnectionStringBuilder(connectionString).DataSource}");
+    Migrator migrator = new Migrator(connectionString);
+
+    var command = commandArgs.FirstOrDefault()?.ToLowerInvariant();
+    var parameters = commandArgs.Skip(1).ToArray();
 
     return command switch
     {
-        "migrate" => Migrator.Migrate(),
-        "rollback" => Migrator.Rollback(parameters),
+        "migrate" => migrator.Migrate(),
+        "rollback" => migrator.Rollback(parameters),
         "list" => migrator.List(),
         "list-migrations" => migrator.ListMigrations(),
         "list-tables" => migrator.ListTables(),

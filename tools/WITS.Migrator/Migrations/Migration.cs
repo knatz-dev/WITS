@@ -5,7 +5,6 @@
 //  ----------------------------------------------------------------------------------
 
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
 
 namespace WITS.Migrator.Migrations
 {
@@ -16,26 +15,8 @@ namespace WITS.Migrator.Migrations
         public abstract string UpScript { get; }
         public abstract string DownScript { get; }
 
-        protected static string GetConnectionString()
+        protected static void EnsureDatabaseExists(string connectionString)
         {
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json")
-                .Build();
-
-            string? connectionString = config.GetConnectionString("DefaultConnection");
-
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                throw new InvalidOperationException("The connection string 'DefaultConnection' is not configured.");
-            }
-
-            return connectionString;
-        }
-
-        protected static void EnsureDatabaseExists()
-        {
-            var connectionString = GetConnectionString();
             var builder = new SqliteConnectionStringBuilder(connectionString);
             var dataSource = builder.DataSource;
             var dataDirectory = Path.GetDirectoryName(dataSource);
@@ -69,11 +50,11 @@ namespace WITS.Migrator.Migrations
             }
         }
 
-        public void Apply()
+        public void Apply(string connectionString)
         {
-            EnsureDatabaseExists();
+            EnsureDatabaseExists(connectionString);
 
-            using var connection = new SqliteConnection(GetConnectionString());
+            using var connection = new SqliteConnection(connectionString);
             connection.Open();
 
             using var transaction = connection.BeginTransaction();
@@ -113,11 +94,11 @@ namespace WITS.Migrator.Migrations
             }
         }
 
-        public void Rollback()
+        public void Rollback(string connectionString)
         {
-            EnsureDatabaseExists();
+            EnsureDatabaseExists(connectionString);
 
-            using var connection = new SqliteConnection(GetConnectionString());
+            using var connection = new SqliteConnection(connectionString);
             connection.Open();
 
             using var transaction = connection.BeginTransaction();

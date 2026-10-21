@@ -4,32 +4,17 @@
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
-using Microsoft.Extensions.Configuration;
+using Microsoft.Data.Sqlite;
+using WITS.Data;
 using WITS.Data.Factory;
 using WITS.Seeder;
 
-Console.WriteLine("WITS Migrator");
+Console.WriteLine("WITS Seeder");
 Console.WriteLine("Initializing database...");
 
-// Load configuration from various sources
-var config = new ConfigurationBuilder()
-    .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: false)
-    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
-    .AddEnvironmentVariables()
-    .AddCommandLine(args)
-    .Build();
-
-// Get database connection string from configuration
-var connectionString = config.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("DefaultConnection not found in configuration");
-
-// Ensure database directory exists
-var dbPath = Path.GetDirectoryName(connectionString.Split('=')[1]);
-if (!string.IsNullOrEmpty(dbPath) && !Directory.Exists(dbPath))
-{
-    Directory.CreateDirectory(dbPath);
-}
+using var config = DatabaseConfiguration.LoadToolConfiguration(args);
+var connectionString = DatabaseConfiguration.GetConnectionString(config);
+Console.WriteLine($"Database: {new SqliteConnectionStringBuilder(connectionString).DataSource}");
 
 DbInitializer.Initialize(new SQliteConnectionFactory(connectionString));
 

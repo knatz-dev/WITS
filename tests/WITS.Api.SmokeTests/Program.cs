@@ -8,6 +8,7 @@ using WITS.Data;
 using WITS.Data.Contracts;
 using WITS.Data.Entity;
 using WITS.Services;
+using WITS.Api.SmokeTests;
 
 // ASP.NET Core 9's test host discovers .sln files, but this repository uses .slnx.
 [assembly: WebApplicationFactoryContentRoot("WITS.Api", "../../../../../src/WITS.Api", "WITS.Api.csproj", "0")]
@@ -56,3 +57,5 @@ if (ReferenceEquals(unitOfWork, otherScope.ServiceProvider.GetRequiredService<IU
 }
 
 Console.WriteLine("PASS: API startup, configured SQLite factory, service resolution, and scoped unit of work.");
+
+await DatabaseTargetChecks.RunAsync();
