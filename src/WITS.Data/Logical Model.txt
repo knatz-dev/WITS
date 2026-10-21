@@ -1,0 +1,99 @@
+UAC / RBAC
+_________________________________--------------------------------__________________________________
+
+Organisation
+- Has many Users
+- Has many Projects
+
+User
+- Belongs to Organisation
+- Has many Roles
+
+Role
+- Has many Permissions
+- Has many Users
+
+Permission - [Create, Read, Update, Delete & Execute]
+- Belongs to many Roles
+
+UserRole (Join Entity)
+- Associates User with Role
+- Scoped to a specific Organisation
+
+ProjectUserRole (Join Entity)
+- Associates User with Role
+- Scoped to a specific Project
+
+Project & Work Item Structure
+_________________________________--------------------------------__________________________________
+
+Project
+- Belongs to Organisation
+- Has many Tickets
+- Has many ProjectMembers
+
+ProjectMember (Join Entity)
+- Associates User with Project
+
+Ticket
+- Belongs to Project
+- Has one TicketPriority
+- Has one TicketRank
+- Has one TicketStatus
+- Has many Activities
+- Assigned to one user
+- Has zero to many collaborators
+
+TicketType
+- Used by many Tickets
+
+Tag
+- Has many Tickets via TicketTag
+
+TicketTag
+- Associates Tag with Ticket
+
+TicketCollaborators
+- Associates User with Ticket
+
+TicketPriority
+- Used by many Tickets
+
+TicketRank
+- Used by many Tickets
+
+TicketStatus
+- Used by many Tickets
+- Has many StatusTransitions
+
+StatusTransition
+- Belongs to WorkFlow
+- From one TicketStatus
+- To another TicketStatus
+- Optional required Role
+
+WorkFlow
+- Belongs to Organisation
+- Has many StatusTransitions
+- Linked to Projects (optional: allow project-specific workflows)
+
+Ticket Activity & Related Actions
+_________________________________--------------------------------__________________________________
+
+TicketActivity
+- Belongs to Ticket
+- Performed by User
+- Has one of Comment, Attachment, or Email
+
+Comment
+- Belongs to TicketActivity
+
+Attachment
+- Belongs to TicketActivity
+
+Email
+- Belongs to TicketActivity
+
+Notification
+- Belongs to User
+- Optionally related to Ticket OR TicketActivity

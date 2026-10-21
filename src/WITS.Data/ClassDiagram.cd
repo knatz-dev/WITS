@@ -1,0 +1,165 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="WITS.Data.Entity.Attachment" Collapsed="true">
+    <Position X="0.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAABAAAAAAAg=</HashCode>
+      <FileName>Entity\Attachment.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Comment" Collapsed="true">
+    <Position X="2.25" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAACAAAAAg=</HashCode>
+      <FileName>Entity\Comment.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Email" Collapsed="true">
+    <Position X="4" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAACAAIAAAAAAAAAAAAAAAAAAAAAAAAg=</HashCode>
+      <FileName>Entity\Email.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Notification" Collapsed="true">
+    <Position X="5.75" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAIAAAAAAAAAAAAAAAAAAgAAAAAABAAAAAAIAAAAAg=</HashCode>
+      <FileName>Entity\Notification.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.NotificationType" Collapsed="true">
+    <Position X="7.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAgAAAAEAAAAAQAAAAAAAAAAAAAAAAACAA=</HashCode>
+      <FileName>Entity\NotificationType.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Organisation" Collapsed="true">
+    <Position X="0.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAgAAAAAAAgAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\Organisation.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Permission" Collapsed="true">
+    <Position X="2.25" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAQ=</HashCode>
+      <FileName>Entity\Permission.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Project" Collapsed="true">
+    <Position X="4" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAQAAAgAAAAAAAAAAAAAAIQAAAAAAAAAAAIEEAAAAAA=</HashCode>
+      <FileName>Entity\Project.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.ProjectMember" Collapsed="true">
+    <Position X="5.75" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAABAAAAAAAAAAAAAAAACAgABAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\ProjectMember.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.ProjectUserRole" Collapsed="true">
+    <Position X="7.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAABAAIAAAAAAAAAEAAACAgABAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\ProjectUserRole.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Role" Collapsed="true">
+    <Position X="0.5" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAABAAAAAAAAAAAQAAgAAAAgAEAAAAAAAAAA=</HashCode>
+      <FileName>Entity\Role.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.StatusTransition" Collapsed="true">
+    <Position X="2.25" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAEgAAAIAAAAAAAAAAIAAEAAAEAAAAAAAAAAAAAE=</HashCode>
+      <FileName>Entity\StatusTransition.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.Ticket" Collapsed="true">
+    <Position X="4" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAgAAAAAIggAAAIAAAACAABBAAAACEAAAUBAIAAAAg=</HashCode>
+      <FileName>Entity\Ticket.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketActivity" Collapsed="true">
+    <Position X="5.75" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAADAAAEACAAAAACAAAAAAgAAAAAABAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\TicketActivity.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketCollaborator" Collapsed="true">
+    <Position X="7.5" Y="2.5" Width="1.75" />
+    <TypeIdentifier>
+      <HashCode>AAABAAAAAAAAAAACAAAAAAgAAAAAABAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\TicketCollaborator.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketPriority" Collapsed="true">
+    <Position X="0.5" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\TicketPriority.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketRank" Collapsed="true">
+    <Position X="2.25" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\TicketRank.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketStatus" Collapsed="true">
+    <Position X="4" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAIAAAAAAAAAAAAAAQAAAAAAAAAAAAAEAAAAAA=</HashCode>
+      <FileName>Entity\TicketStatus.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketTag" Collapsed="true">
+    <Position X="5.75" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAgAAACAAAAAAAAAAAAABAAAAAAAAAAAAE=</HashCode>
+      <FileName>Entity\TicketTag.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.TicketType" Collapsed="true">
+    <Position X="7.5" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Entity\TicketType.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.User" Collapsed="true">
+    <Position X="0.5" Y="4.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>EACACEAAAAAQAIAAAQAAQAAAAAAAAAAAAAIAEgAAAAg=</HashCode>
+      <FileName>Entity\User.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.UserRole" Collapsed="true">
+    <Position X="2.25" Y="4.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAABAAIAAAAAAAAAEAAAAAgAAAAAAAAAAAIAEAAAAAA=</HashCode>
+      <FileName>Entity\UserRole.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="WITS.Data.Entity.WorkFlow" Collapsed="true">
+    <Position X="4" Y="4.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAEAAAAQA=</HashCode>
+      <FileName>Entity\WorkFlow.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Font Name="Segoe UI" Size="9.6" />
+</ClassDiagram>
