@@ -94,6 +94,21 @@ Every expected failure answers with `application/problem+json` carrying `status`
 - Anything unhandled → **500** (`Internal Server Error`) with only a `traceId`;
   the exception is logged server-side and never included in the response.
 
+## Password storage
+
+Passwords are hashed with **PBKDF2-HMAC-SHA256**, 600,000 iterations, and a
+fresh 16-byte random salt per password. `PasswordHash` stores
+`PBKDF2$<iterations>$<base64 hash>` and `PasswordSalt` stores the base64 salt.
+The cost is recorded with the value, so iterations can be raised later while
+existing hashes keep verifying.
+
+The previous HMAC-based scheme could never verify a password: hashing used a
+random HMAC key while verification used the Base64 *text* of that key, so the
+keys never matched. There is therefore nothing to migrate — legacy rows and the
+seeder's placeholder hashes fail verification and those accounts need a password
+reset once the recovery flow exists. Unrecognized or damaged stored values fail
+closed with `false` instead of throwing.
+
 ## Verification
 
 ```sh

@@ -14,6 +14,8 @@ Repository checks use real SQLite to verify that `GetAllAsync` preserves empty-p
 
 Error-response checks run the API in `Production` and require `application/problem+json` bodies carrying `status`, `title`, and `detail` for every expected failure: an unauthenticated request (keeping `WWW-Authenticate`), rejected credentials, duplicate registration (409), registration validation (400), a missing ticket (404), an unreadable request body, an authorization refusal, and an unhandled service exception. The unhandled case must also stay free of exception and stack-trace content. Ticket lookup and registration are exercised with stubbed services because the real services need a schema and working credentials.
 
+Password-storage checks assert that a freshly hashed password round-trips, that a wrong or empty password and a missing salt fail, that each password gets its own salt, that a stored hash records a real work factor and verification derives with exactly that cost, and that fourteen damaged/legacy stored values (unstructured text, legacy HMAC pairs, bad cost fields, bad Base64, truncated payloads) fail closed instead of throwing.
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.

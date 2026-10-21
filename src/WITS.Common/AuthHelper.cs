@@ -4,13 +4,20 @@
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
+using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace WITS.Common;
 
 public static class AuthHelper
 {
+    // Scheme and cost travel with the stored value, so iterations can be raised later without breaking existing rows.
+    private const string Scheme = "PBKDF2";
+    private const int Iterations = 600_000;
+    private const int MaxIterations = 5_000_000;
+    private const int SaltSize = 16;
+    private const int HashSize = 32;
+
     /// <summary>
     /// Generates a hash and salt for the given password.
     /// </summary>
@@ -22,24 +29,11 @@ public static class AuthHelper
         {
             throw new ArgumentException("Password cannot be null or empty.", nameof(password));
         }
-        using var hmac = new HMACSHA256();
-        var salt = Convert.ToBase64String(hmac.Key);
-        var hash = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(password)));
-        return (hash, salt);
-    }
 
-    /// <summary>
-    /// Verifies if two passwords match.
-    /// </summary>
-    /// <param name="password1"></param>
-    /// <param name="password2"></param>
-    /// <returns></returns>
-    public static bool ArePasswordsEqual(string password1, string password2)
-    {
-        return !string.IsNullOrEmpty(password1) && !string.IsNullOrEmpty(password2)
-            && password1.Trim().Equals(password2.Trim(), StringComparison.OrdinalIgnoreCase);
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, HashSize);
+        return ($"{Scheme}${Iterations}${Convert.ToBase64String(hash)}", Convert.ToBase64String(salt));
     }
-
 
     /// <summary>
     /// Verifies the password against the stored hash and salt.
@@ -48,16 +42,38 @@ public static class AuthHelper
     /// <param name="storedHash"></param>
     /// <param name="storedSalt"></param>
     /// <returns></returns>
-    public static bool VerifyPasswordHash(string password, string? storedHash, string storedSalt)
+    public static bool VerifyPasswordHash(string password, string? storedHash, string? storedSalt)
     {
-        if (string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
+        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash) || string.IsNullOrEmpty(storedSalt))
         {
             return false;
         }
 
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(storedSalt));
-        var computedHash = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(password)));
-        return computedHash == storedHash;
+        var parts = storedHash.Split('$');
+        if (parts.Length != 3 || parts[0] != Scheme
+            || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var iterations)
+            || iterations is < 1 or > MaxIterations)
+        {
+            // Legacy HMAC values and damaged rows never verify; those accounts need a password reset.
+            return false;
+        }
+
+        try
+        {
+            var expected = Convert.FromBase64String(parts[2]);
+            if (expected.Length == 0)
+            {
+                return false;
+            }
+
+            var actual = Rfc2898DeriveBytes.Pbkdf2(
+                password, Convert.FromBase64String(storedSalt), iterations, HashAlgorithmName.SHA256, expected.Length);
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
 }
