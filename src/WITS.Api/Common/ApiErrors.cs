@@ -20,6 +20,9 @@ public static class ApiErrors
     public static ProblemDetails Conflict(string detail) =>
         Create(StatusCodes.Status409Conflict, "Conflict", detail);
 
+    public static ProblemDetails TooManyRequests(string detail) =>
+        Create(StatusCodes.Status429TooManyRequests, "Too Many Requests", detail);
+
     public static ProblemDetails Internal(string detail) =>
         Create(StatusCodes.Status500InternalServerError, "Internal Server Error", detail);
 

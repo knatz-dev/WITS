@@ -91,6 +91,8 @@ Every expected failure answers with `application/problem+json` carrying `status`
 - Authenticated but disallowed → **403** (`Forbidden`).
 - Unknown resource → **404** (`Not Found`).
 - Duplicate registration → **409** (`Conflict`).
+- Authentication request limit reached → **429** (`Too Many Requests`) with
+  `Retry-After` in seconds.
 - Anything unhandled → **500** (`Internal Server Error`) with only a `traceId`;
   the exception is logged server-side and never included in the response.
 
@@ -108,6 +110,52 @@ keys never matched. There is therefore nothing to migrate — legacy rows and th
 seeder's placeholder hashes fail verification and those accounts need a password
 reset once the recovery flow exists. Unrecognized or damaged stored values fail
 closed with `false` instead of throwing.
+
+## Authentication abuse controls
+
+Login and registration share these process-local limits, applied before request
+body binding and service execution:
+
+- **10 requests per source IP per one-minute fixed window**, across both routes.
+- **120 requests per process per one-minute fixed window**, across all source IPs.
+- **4 concurrent authentication requests**, with no waiting queue.
+
+Excess traffic receives `429 application/problem+json` and `Retry-After`. The
+process budget is checked first, so IP/concurrency rejections also consume that
+budget. Fixed windows can admit bursts at a window boundary. Missing remote
+addresses share one bucket; IPv4 and IPv4-mapped IPv6 addresses share a bucket.
+The limiter uses `Connection.RemoteIpAddress`, not a request-supplied forwarding
+header. Behind a proxy, clients share the proxy's bucket until explicitly trusted
+forwarded-header handling or proxy-side enforcement is configured. Do not trust
+arbitrary `X-Forwarded-For` values.
+
+For each username, **five failed credential checks within a 15-minute observation
+window** block further checks for **15 minutes from the fifth failure**. Unknown
+usernames follow the same rule. Checks for the same account are serialized:
+concurrent attempts are rejected rather than queued. Throttle keys ignore case
+and surrounding whitespace; account lookup itself is unchanged. A successful login
+clears previous failures. Database/system errors release the reservation without
+counting as incorrect credentials.
+
+**Recovery:** wait for the temporary lockout to expire, then sign in with valid
+credentials. Requests rejected during lockout do not extend it. This does not
+clear `User.IsLocked`, the existing administrative lock flag; administering that
+flag belongs to the user-administration work. No password-reset flow is implied.
+
+All rejected logins return the same `401` detail, `Invalid credentials`, including
+unknown users, wrong/empty passwords, administrative locks and temporary lockouts.
+Unknown and administratively locked users perform dummy PBKDF2 work to reduce
+timing differences. Usernames must be nonblank and at most 128 characters, and
+passwords at most 1,024 characters; registration also rejects empty passwords with
+400 before hashing. These limits use .NET string length, without truncation.
+
+The failed-attempt store is bounded to **10,000 username keys**. At capacity it
+reclaims expired, non-running records and rejects new keys if still full; it never
+evicts a live lockout to accommodate another username. Both lockout and request
+limits **reset on process restart and are not shared between instances**. Use a
+shared atomic lockout store and shared ingress enforcement before multi-instance
+deployment or when lockouts must survive restart. No database schema change is
+needed for this single-process implementation.
 
 ## Token claims
 

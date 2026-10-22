@@ -56,7 +56,7 @@ but does not provision an alerting service.
 | `wits.http.requests` (`WITS`) | Counter, requests leaving the API pipeline, tagged by `http.route` **template** and `http.response.status_code`. Includes handled 4xx/5xx. Unmatched paths share `(unmatched)`. Use status totals for traffic, client-error, and server-error rates. This records the response status, not a guarantee that the client received the entire body. |
 | `http.server.request.duration` (`Microsoft.AspNetCore.Hosting`) | Framework histogram in **seconds**, tagged by route template, method, status and other framework HTTP dimensions. Includes authentication, service/database work and response processing. The tool exports per-interval p50/p95/p99; it does not export histogram counts, hence the separate request counter. |
 | `http.server.active_requests` (`Microsoft.AspNetCore.Hosting`) | In-flight requests; sustained growth alongside latency suggests saturation. |
-| `wits.auth.failures` (`WITS`) | Counter, one per rejected credential check or bearer challenge. Fixed `reason`: `unknown_account`, `account_locked`, `empty_password`, `password_mismatch`, `missing_bearer`, `invalid_bearer`. A rejected login is not counted again as a bearer challenge. Successful login, 403, malformed input and database failures are not authentication failures. |
+| `wits.auth.failures` (`WITS`) | Counter, one per rejected credential check, bearer challenge or abuse-control rejection. Fixed `reason`: `unknown_account`, `account_locked`, `empty_password`, `password_mismatch`, `missing_bearer`, `invalid_bearer`, `invalid_input`, `login_throttled`, `rate_limited`. `login_throttled` covers temporary account lockout, an already-running account check, or a full attempt store; it produces the same generic 401. `rate_limited` covers HTTP IP/process/concurrency limits and produces 429. `invalid_input` covers invalid credential field lengths/nulls. A rejected login is not counted again as a bearer challenge. Successful login, 403, malformed JSON and database failures do not increment this counter (a malformed request rejected by the limiter still counts as `rate_limited`). |
 | `wits.sqlite.contention` (`WITS`) | Counter of **terminal** SQLite exceptions reaching the API exception handler: base code 5 → `error.type=busy`, 6 → `locked` (including extended codes with those base codes). Other database errors remain 500s, not contention. It does not count internal driver retries, waits that eventually succeed, maintenance tools, or future workers. Successful long waits still affect request latency. |
 | `System.Runtime` | Runtime CPU, GC, memory and thread-pool measurements for distinguishing expensive computation from blocked work. |
 
@@ -85,6 +85,7 @@ These are starting thresholds, not promised service-level objectives.
 | Route/status p95 > 1 second in three consecutive 5-second samples, with at least 20 requests in each sample | Warn API owner. Inspect slow-request logs and runtime measurements; profile the affected instance. Do not merge per-series percentiles. |
 | Any terminal SQLite contention in 5 minutes | Warn; page if at least 5 failures in that window. Look for concurrent writers, long transactions and overlapping migrator/seeder jobs. Do not interpret contention as permission to increase timeouts blindly. |
 | At least 20 credential or invalid-bearer failures per minute for 5 minutes | Warn operator to investigate authentication logs and traffic. Exclude `missing_bearer` from this rule; track it separately because anonymous probes are common. |
+| Sustained `login_throttled` or `rate_limited` increments for 5 minutes | Inspect source traffic, shared-proxy buckets and affected accounts. Temporary locks expire 15 minutes after the fifth failure; rejected retries do not extend them. Do not clear administrative `IsLocked` flags as an abuse-control recovery step. |
 | Collector/process exits or no metric samples for two collection intervals while API is expected to run | Alert operator about a collection/availability gap. Do not infer recovery from absent metrics. Startup failures are also in process exit status/stderr. |
 
 ## Investigating a slow operation
@@ -106,6 +107,10 @@ in the affected time window. This profile samples managed thread stacks to estim
 wall-clock time, not precise CPU usage or stored distributed spans; correlate its
 time window with the log. If latency is high without CPU
 pressure, inspect contention, active requests and transaction duration first.
+
+See [authentication abuse controls](../README.md#authentication-abuse-controls)
+for the exact request limits, automatic recovery, proxy assumptions and
+process-local enforcement boundary.
 
 ## Delivery signals (contract for the future worker)
 

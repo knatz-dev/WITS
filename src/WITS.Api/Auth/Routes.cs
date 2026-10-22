@@ -14,7 +14,8 @@ public class Routes : IEndpointDefinition
     public void Register(RouteGroupBuilder routeBuilder)
     {
         RouteGroupBuilder authGroup = routeBuilder.MapGroup("auth")
-            .WithTags("Authentication");
+            .WithTags("Authentication")
+            .RequireRateLimiting(AuthenticationRateLimits.Policy);
         authGroup.MapPost("login", LoginHandler)
             .WithName("Login")
             .AllowAnonymous();

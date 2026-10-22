@@ -40,7 +40,8 @@ internal static class IdentityClaimsChecks
             PasswordSalt = salt
         };
 
-        var authService = new AuthService(new StubUnitOfWork(account), Options.Create(settings), NullLogger<AuthService>.Instance);
+        var authService = new AuthService(new StubUnitOfWork(account), Options.Create(settings), NullLogger<AuthService>.Instance,
+            new LoginAttemptTracker(TimeProvider.System));
         var issued = await authService.ValidateCredentialsAsync(account.Username, Password);
         if (!issued.Success || string.IsNullOrEmpty(issued.Token))
         {

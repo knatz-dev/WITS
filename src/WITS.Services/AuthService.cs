@@ -34,15 +34,20 @@ public interface IAuthService
 
 public class AuthService : IAuthService
 {
+    private const string InvalidCredentials = "Invalid credentials";
+    private static readonly (string Hash, string Salt) DummyPassword =
+        AuthHelper.HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
     private readonly IGenericRepository<User, long> _userRepository;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthService> _logger;
+    private readonly LoginAttemptTracker _loginAttempts;
 
-    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger)
+    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger, LoginAttemptTracker loginAttempts)
     {
         _userRepository = unitOfWork.GetRepository<User, long>();
         _jwtSettings = jwtSettings.Value;
         _logger = logger;
+        _loginAttempts = loginAttempts;
     }
 
     public string GenerateToken(UserTokenModel userToken)
@@ -76,6 +81,33 @@ public class AuthService : IAuthService
 
     public async Task<CredentialResult> ValidateCredentialsAsync(string username, string password)
     {
+        if (string.IsNullOrWhiteSpace(username) || username.Length > 128 || password is null || password.Length > 1024)
+        {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "invalid_input"));
+            return new CredentialResult(false, null, InvalidCredentials);
+        }
+        if (!_loginAttempts.TryBegin(username))
+        {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "login_throttled"));
+            _logger.LogWarning("Login throttled for {Username}", username);
+            return new CredentialResult(false, null, InvalidCredentials);
+        }
+
+        bool? success = null;
+        try
+        {
+            var result = await ValidateCredentialsCoreAsync(username, password);
+            success = result.Success;
+            return result;
+        }
+        finally
+        {
+            _loginAttempts.Complete(username, success);
+        }
+    }
+
+    private async Task<CredentialResult> ValidateCredentialsCoreAsync(string username, string password)
+    {
         var stopwatch = Stopwatch.StartNew();
         var filter = new GenericFilter
         {
@@ -92,19 +124,22 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
+            // Unknown and administratively locked accounts still perform password work to reduce account-enumeration timing differences.
+            _ = AuthHelper.VerifyPasswordHash(password, DummyPassword.Hash, DummyPassword.Salt);
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "unknown_account"));
             _logger.LogWarning("Login failed for {Username}: unknown account after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
-            return new CredentialResult(false, null, "User account not found!");
+            return new CredentialResult(false, null, InvalidCredentials);
         }
 
         // Check if user is locked
         if (user.IsLocked)
         {
+            _ = AuthHelper.VerifyPasswordHash(password, DummyPassword.Hash, DummyPassword.Salt);
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "account_locked"));
             _logger.LogWarning("Login failed for {Username}: account locked after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
-            return new CredentialResult(false, null, "User account is locked. Please contact support.");
+            return new CredentialResult(false, null, InvalidCredentials);
         }
 
         // If password is null or empty, return invalid credentials
@@ -113,7 +148,7 @@ public class AuthService : IAuthService
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "empty_password"));
             _logger.LogWarning("Login failed for {Username}: empty password after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
-            return new CredentialResult(false, null, "Password cannot be empty");
+            return new CredentialResult(false, null, InvalidCredentials);
         }
 
         // Check if password matches the stored hash and salt
@@ -125,7 +160,7 @@ public class AuthService : IAuthService
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "password_mismatch"));
             _logger.LogWarning("Login failed for {Username}: password mismatch after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
-            return new CredentialResult(false, null, "Invalid credentials");
+            return new CredentialResult(false, null, InvalidCredentials);
         }
 
         // Generate token if credentials are valid
@@ -144,6 +179,11 @@ public class AuthService : IAuthService
  
     public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
     {
+        if (string.IsNullOrWhiteSpace(user.Username) || user.Username.Length > 128
+            || string.IsNullOrEmpty(user.Password) || user.Password.Length > 1024)
+        {
+            return new RegistrationResult(false, "Username must be 1–128 characters and password must be 1–1024 characters.");
+        }
         // Check if user exists
         var filter = new GenericFilter
         {

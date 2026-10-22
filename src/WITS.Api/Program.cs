@@ -13,6 +13,7 @@ using WITS.Data.Factory;
 using WITS.Data.Repository;
 using WITS.Common;
 using WITS.Api.Common;
+using WITS.Api.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
@@ -84,6 +85,9 @@ static async Task WriteProblemAsync(HttpContext context, ProblemDetails problem)
 }
 
 builder.Services.AddAuthorization();
+builder.Services.AddAuthenticationRateLimits();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<LoginAttemptTracker>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -149,6 +153,7 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

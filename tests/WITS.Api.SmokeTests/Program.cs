@@ -63,6 +63,7 @@ await IdentityClaimsChecks.RunAsync();
 await ErrorResponseChecks.RunAsync();
 await DiagnosticsChecks.RunAsync();
 await OperationalSignalsChecks.RunAsync();
+await AuthenticationAbuseChecks.RunAsync();
 await RepositoryFailureChecks.RunAsync();
 await TransactionOwnershipChecks.RunAsync();
 await StartupConfigurationChecks.RunAsync();

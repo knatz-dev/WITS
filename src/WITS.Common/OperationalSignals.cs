@@ -12,7 +12,7 @@ public static class OperationalSignals
         "wits.http.requests", "{request}", "Requests leaving the API pipeline, by route template and response status.");
 
     public static readonly Counter<long> AuthenticationFailures = Meter.CreateCounter<long>(
-        "wits.auth.failures", "{failure}", "Rejected credentials and bearer challenges, by fixed reason.");
+        "wits.auth.failures", "{failure}", "Rejected credentials, bearer challenges and abuse-control rejections, by fixed reason.");
 
     // shortcut: API-terminal contention only; instrument the data layer when retry/worker paths are introduced.
     public static readonly Counter<long> SqliteContention = Meter.CreateCounter<long>(
