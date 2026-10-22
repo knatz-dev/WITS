@@ -92,6 +92,7 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "unknown_account"));
             _logger.LogWarning("Login failed for {Username}: unknown account after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "User account not found!");
@@ -100,6 +101,7 @@ public class AuthService : IAuthService
         // Check if user is locked
         if (user.IsLocked)
         {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "account_locked"));
             _logger.LogWarning("Login failed for {Username}: account locked after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "User account is locked. Please contact support.");
@@ -108,6 +110,7 @@ public class AuthService : IAuthService
         // If password is null or empty, return invalid credentials
         if (string.IsNullOrEmpty(password))
         {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "empty_password"));
             _logger.LogWarning("Login failed for {Username}: empty password after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "Password cannot be empty");
@@ -119,6 +122,7 @@ public class AuthService : IAuthService
         // Use salt and hash for verification
         if (!hashMatched)
         {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "password_mismatch"));
             _logger.LogWarning("Login failed for {Username}: password mismatch after {ElapsedMs} ms",
                 username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "Invalid credentials");

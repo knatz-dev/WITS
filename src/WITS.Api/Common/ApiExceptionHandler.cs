@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
+using WITS.Common;
 
 namespace WITS.Api.Common;
 
@@ -9,6 +11,12 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
+        if (exception is SqliteException { SqliteErrorCode: 5 or 6 } sqlite)
+        {
+            OperationalSignals.SqliteContention.Add(1, new KeyValuePair<string, object?>(
+                "error.type", sqlite.SqliteErrorCode == 5 ? "busy" : "locked"));
+        }
+
         var unreadableRequest = exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest };
         var problem = unreadableRequest
             ? ApiErrors.Validation("The request could not be read. Check the body format and supplied values.")

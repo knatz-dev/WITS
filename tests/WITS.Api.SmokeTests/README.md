@@ -22,6 +22,8 @@ Diagnostics checks run the real `AuthService` through HTTP against a capturing l
 
 Transaction-ownership checks run multiple operations, a commit (verified visible through a separate connection), a rollback, and repository reuse across transaction boundaries on a temporary SQLite database, and require the unit of work to be the sole connection owner with live transaction enlistment.
 
+Operational-signal checks listen to real .NET metrics and assert request counts/status/latency, every authentication-failure reason, bounded route labels and no sensitive labels. A real SQLite busy timeout and simulated locked failure count as contention; another SQLite error does not. The real timeout must also log a slow request with its route template and client-visible trace ID. Collection commands and alert policy are in [the operator runbook](../../docs/OPERATIONS.md).
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.

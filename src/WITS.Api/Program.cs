@@ -5,6 +5,7 @@
 //  ----------------------------------------------------------------------------------
 
 using System.Text;
+using System.Diagnostics;
 using WITS.Services;
 using WITS.Data;
 using WITS.Data.Contracts;
@@ -61,6 +62,8 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         {
             OnChallenge = async context =>
             {
+                OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>(
+                    "reason", context.AuthenticateFailure is null ? "missing_bearer" : "invalid_bearer"));
                 context.HandleResponse();
                 context.HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.HttpContext.Response.Headers.WWWAuthenticate = "Bearer";
@@ -108,7 +111,27 @@ app.Use(async (context, next) =>
 {
     using (requestLogger.BeginScope("Request {TraceId}", context.TraceIdentifier))
     {
-        await next(context);
+        var started = Stopwatch.GetTimestamp();
+        var route = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText ?? "(unmatched)";
+        try
+        {
+            await next(context);
+        }
+        finally
+        {
+            var elapsed = Stopwatch.GetElapsedTime(started);
+            OperationalSignals.Requests.Add(1, new TagList
+            {
+                { "http.route", route },
+                { "http.response.status_code", context.Response.StatusCode }
+            });
+            if (elapsed.TotalSeconds >= 1)
+            {
+                requestLogger.LogWarning("Slow request {Method} {Route} returned {StatusCode} after {ElapsedMs} ms with trace id {TraceId}",
+                    context.Request.Method, route, context.Response.StatusCode, elapsed.TotalMilliseconds,
+                    Activity.Current?.Id ?? context.TraceIdentifier);
+            }
+        }
     }
 });
 

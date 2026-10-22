@@ -129,7 +129,7 @@ internal static class DiagnosticsChecks
         }
     }
 
-    private sealed class CapturingLoggerProvider : ILoggerProvider
+    internal sealed class CapturingLoggerProvider : ILoggerProvider
     {
         private readonly LoggerExternalScopeProvider _scopes = new();
 

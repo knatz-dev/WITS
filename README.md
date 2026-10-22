@@ -140,6 +140,15 @@ Passwords, hashes, tokens, and request bodies are never logged. The 500 body
 stays opaque apart from its `traceId`; exception details exist only in the
 server log.
 
+## Operational signals
+
+Request/error counts, framework latency histograms, authentication failures, and
+terminal SQLite contention are collectable with .NET diagnostic tools. Requests
+taking at least one second log their route template, elapsed time and trace ID.
+See [the operator runbook](docs/OPERATIONS.md) for collection destinations,
+commands, alert thresholds, performance profiling and the future delivery-signal
+contract.
+
 ## Verification
 
 ```sh
