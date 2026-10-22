@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WITS.Services;
 using WITS.Api.Common;
 using WITS.Models;
+using WITS.Common;
 
 namespace WITS.Api.Auth;
 
@@ -35,6 +36,12 @@ public class Routes : IEndpointDefinition
     private static async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> LoginHandler(
         IAuthService authService, [FromBody] LoginRequest request)
     {
+        if (request is null || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password)
+            || request.Username.Length > 128 || request.Password.Length > 1024)
+        {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "invalid_input"));
+            return TypedResults.Problem(ApiErrors.Validation("Username and password are required."));
+        }
         var credentialResult = await authService.ValidateCredentialsAsync(request.Username, request.Password);
         if (!credentialResult.Success)
         {
@@ -72,6 +79,17 @@ public class Routes : IEndpointDefinition
     private static async Task<Results<Ok<string>, ProblemHttpResult>> RegisterHandler(
         IAuthService authService, [FromBody] RegisterRequest request)
     {
+        if (request is null)
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Request body is required."));
+        }
+        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var context = new System.ComponentModel.DataAnnotations.ValidationContext(request);
+        if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(request, context, validationResults, validateAllProperties: true))
+        {
+            var detail = string.Join(" ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+            return TypedResults.Problem(ApiErrors.Validation(string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail));
+        }
         var result = await authService.RegisterUserAsync(request);
         if (!result.Success)
         {

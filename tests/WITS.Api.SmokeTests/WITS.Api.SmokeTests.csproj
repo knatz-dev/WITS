@@ -5,7 +5,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <ProjectReference Include="../../src/WITS.Api/WITS.Api.csproj" />
-    <ProjectReference Include="../../tools/WITS.Migrator/WITS.Migrator.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/WITS.Migrator/WITS.Migrator.csproj" />
     <ProjectReference Include="../../tools/WITS.Seeder/WITS.Seeder.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

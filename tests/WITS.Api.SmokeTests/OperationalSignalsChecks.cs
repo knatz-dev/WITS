@@ -77,7 +77,10 @@ internal static class OperationalSignalsChecks
 
             await RejectedLoginAsync(client, account.Username, "wrong");
             await RejectedLoginAsync(client, "unknown", "wrong");
-            await RejectedLoginAsync(client, account.Username, "");
+            using (var empty = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(account.Username, "")))
+            {
+                Require(empty.StatusCode == HttpStatusCode.BadRequest, "Empty password must be rejected at the boundary.");
+            }
             account.IsLocked = true;
             await RejectedLoginAsync(client, account.Username, "signals-secret");
             account.IsLocked = false;
@@ -117,7 +120,7 @@ internal static class OperationalSignalsChecks
             }
 
             var samples = measurements.ToArray();
-            foreach (var reason in new[] { "password_mismatch", "unknown_account", "empty_password", "account_locked", "missing_bearer", "invalid_bearer" })
+            foreach (var reason in new[] { "password_mismatch", "unknown_account", "account_locked", "missing_bearer", "invalid_bearer" })
             {
                 Require(samples.Where(m => m.Name == "wits.auth.failures" && Equals(m.Tags["reason"], reason)).Sum(m => (long)m.Value) == 1,
                     $"Authentication reason {reason} must be counted exactly once.");

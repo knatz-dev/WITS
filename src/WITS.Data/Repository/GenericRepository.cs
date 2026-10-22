@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Text.Json;
 using Dapper;
@@ -11,6 +12,8 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
     where T : BaseEntity<TDataType>
 {
     private static readonly string TypeName = typeof(T).Name;
+    public const int MaxPageSize = 100;
+    private const int MaxFilterCount = 10;
 
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly Func<IDbTransaction?>? _currentTransaction;
@@ -30,7 +33,9 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
         var props = typeof(T).GetProperties();
         _columnNames = props
-            .Where(p => !string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase))
+            .Where(p => !string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase)
+                && p.CanWrite
+                && !Attribute.IsDefined(p, typeof(NotMappedAttribute), inherit: true))
             .Select(p => p.Name)
             .ToList();
 
@@ -86,6 +91,8 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<PagedResult<T>> GetAllAsync(int pageNumber = 1, int pageSize = 100)
     {
+        if (pageNumber < 1) throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be at least 1.");
+        if (pageSize < 1 || pageSize > MaxPageSize) throw new ArgumentOutOfRangeException(nameof(pageSize), $"Page size must be between 1 and {MaxPageSize}.");
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
 
@@ -112,6 +119,11 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<PagedResult<T>> QueryAsync(GenericFilter filter)
     {
+        ArgumentNullException.ThrowIfNull(filter);
+        if (filter.PageNumber < 1) throw new ArgumentOutOfRangeException(nameof(filter), "Page number must be at least 1.");
+        if (filter.PageSize < 1 || filter.PageSize > MaxPageSize) throw new ArgumentOutOfRangeException(nameof(filter), $"Page size must be between 1 and {MaxPageSize}.");
+        if (filter.SortOrder is not null && filter.SortOrder is not ("" or "ASC" or "DESC" or "asc" or "desc"))
+            throw new ArgumentException("Sort order must be ASC or DESC.", nameof(filter));
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
 
@@ -119,17 +131,25 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         var whereConditions = new List<string> { "IsDeleted = 0" };
         int paramIndex = 0;
 
+        if (filter.Filters is { Count: > MaxFilterCount })
+        {
+            throw new ArgumentException($"A query may specify at most {MaxFilterCount} filters.", nameof(filter));
+        }
         if (filter.Filters?.Count > 0)
         {
             foreach (var (property, criteria) in filter.Filters)
             {
+                if (criteria is null) throw new ArgumentException("Filter criteria cannot be null.", nameof(filter));
                 if (!_columnNames.Contains(property, StringComparer.OrdinalIgnoreCase) &&
                     !property.Equals(_primaryKeyColumn, StringComparison.OrdinalIgnoreCase))
                 {
-                    continue;
+                    throw new ArgumentException($"Unknown filter field '{property}'.", nameof(filter));
                 }
 
                 var op = criteria.Operator?.ToUpperInvariant() ?? "EQUALS";
+                var knownOps = new[] { "CONTAINS", "GT", ">", "GTE", ">=", "LT", "<", "LTE", "<=", "EQUALS", "=" };
+                if (!knownOps.Contains(op)) throw new ArgumentException($"Unknown filter operator '{criteria.Operator}'.", nameof(filter));
+
                 var paramName = $"@p{paramIndex++}";
                 var value = criteria.Value is JsonElement json ? json.ToPrimitive() : criteria.Value;
 
@@ -173,9 +193,20 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         var countQuery = $"SELECT COUNT(*) FROM {_tableName} {whereClause}";
         var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, Transaction);
 
-        var sortColumn = !string.IsNullOrWhiteSpace(filter.SortColumn) && _columnNames.Contains(filter.SortColumn)
-            ? filter.SortColumn
-            : _primaryKeyColumn;
+        string sortColumn;
+        if (string.IsNullOrWhiteSpace(filter.SortColumn))
+        {
+            sortColumn = _primaryKeyColumn;
+        }
+        else if (!_columnNames.Contains(filter.SortColumn, StringComparer.OrdinalIgnoreCase)
+            && !filter.SortColumn.Equals(_primaryKeyColumn, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Unknown sort column '{filter.SortColumn}'.", nameof(filter));
+        }
+        else
+        {
+            sortColumn = filter.SortColumn;
+        }
 
         var sortOrder = filter.SortOrder?.ToUpperInvariant() == "DESC" ? "DESC" : "ASC";
         var offset = (filter.PageNumber - 1) * filter.PageSize;

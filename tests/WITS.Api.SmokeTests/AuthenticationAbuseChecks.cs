@@ -148,11 +148,11 @@ internal static class AuthenticationAbuseChecks
         account.IsLocked = false;
         using (var oversized = await Login(new string('x', 129), new string('x', 1025)))
         {
-            await ExpectLoginFailureAsync(oversized);
+            Require(oversized.StatusCode == HttpStatusCode.BadRequest, "Invalid login fields must be rejected at the boundary with 400.");
         }
         using (var nullFields = await Login(null!, null!))
         {
-            await ExpectLoginFailureAsync(nullFields);
+            Require(nullFields.StatusCode == HttpStatusCode.BadRequest, "Null login fields must be rejected at the boundary with 400.");
         }
         var invalidRegistration = Registration();
         invalidRegistration.Password = "";

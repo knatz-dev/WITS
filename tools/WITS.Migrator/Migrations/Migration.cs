@@ -64,7 +64,7 @@ namespace WITS.Migrator.Migrations
                 var checkSql = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = @MigrationId";
                 using var checkCmd = new SqliteCommand(checkSql, connection, transaction);
                 checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
-                int exists = (int?)checkCmd.ExecuteScalar() ?? 0;
+                long exists = (long)checkCmd.ExecuteScalar()!;
 
                 if (exists == 0)
                 {

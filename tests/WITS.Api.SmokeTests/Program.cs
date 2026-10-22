@@ -69,3 +69,4 @@ await RepositoryFailureChecks.RunAsync();
 await TransactionOwnershipChecks.RunAsync();
 await StartupConfigurationChecks.RunAsync();
 await DatabaseTargetChecks.RunAsync();
+await MigrationApplyChecks.RunAsync();

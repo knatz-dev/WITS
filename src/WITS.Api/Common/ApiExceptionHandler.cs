@@ -17,16 +17,17 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
                 "error.type", sqlite.SqliteErrorCode == 5 ? "busy" : "locked"));
         }
 
-        var unreadableRequest = exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest };
-        var problem = unreadableRequest
-            ? ApiErrors.Validation("The request could not be read. Check the body format and supplied values.")
+        var invalidRequest = exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest }
+            or ArgumentException;
+        var problem = invalidRequest
+            ? ApiErrors.Validation(exception.Message)
             : ApiErrors.Internal("An error occurred while processing your request.");
         // The client-visible trace id: the problem-details writer overwrites traceId with this same expression.
         var traceId = Activity.Current?.Id ?? httpContext.TraceIdentifier;
         problem.Extensions["traceId"] = traceId;
         httpContext.Response.StatusCode = problem.Status!.Value;
 
-        if (!unreadableRequest)
+        if (!invalidRequest)
         {
             logger.LogError(exception, "Unhandled exception handling {Method} {Path} with trace id {TraceId}",
                 httpContext.Request.Method, httpContext.Request.Path, traceId);

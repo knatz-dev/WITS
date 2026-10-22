@@ -303,7 +303,7 @@ namespace WITS.Migrator
                 catch (Exception ex)
                 {
                     table.AddRow(migration.MigrationId, migration.Name, "[red]Failed[/]");
-                    AnsiConsole.MarkupLine($"[red]Error applying migration {migration.Name}: {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]Error applying migration {Markup.Escape(migration.Name)}: {Markup.Escape(ex.Message)}[/]");
                     throw;
                 }
             }

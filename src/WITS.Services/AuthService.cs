@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -232,6 +233,16 @@ public class AuthService : IAuthService
 
     public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
     {
+        var validationResults = new List<ValidationResult>();
+        if (!Validator.TryValidateObject(user, new ValidationContext(user), validationResults, true))
+        {
+            var detail = string.Join(" ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
+            return new RegistrationResult(false, string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail);
+        }
+        if (user.Created == default)
+        {
+            return new RegistrationResult(false, "Created must be a valid UTC timestamp.");
+        }
         if (string.IsNullOrWhiteSpace(user.Username) || user.Username.Length > 128
             || string.IsNullOrEmpty(user.Password) || user.Password.Length > 1024)
         {

@@ -12,16 +12,26 @@ namespace WITS.Migrator.Migrations
     {
         public override string MigrationId => "20250419113604";
         public override string Name => "SystemSchema";
-        
+
         public override string UpScript => @"
-            -- TODO: Add your migration SQL here
-            -- Example: CREATE TABLE IF NOT EXISTS TableName (
-            --     Id INTEGER PRIMARY KEY AUTOINCREMENT,
-            --     CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            -- )";
+            -- Create Organisation table
+            CREATE TABLE IF NOT EXISTS Organisation (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
+                Created TEXT NOT NULL,
+                LastModified TEXT,
+                Name TEXT NOT NULL,
+                Code TEXT NOT NULL,
+                Description TEXT
+            );
+
+            -- Create unique index on Code
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_Organisation_Code ON Organisation(Code);
+        ";
 
         public override string DownScript => @"
-            -- TODO: Add your rollback SQL here
-            -- Example: DROP TABLE IF EXISTS TableName";
+            DROP INDEX IF EXISTS idx_Organisation_Code;
+            DROP TABLE IF EXISTS Organisation;
+        ";
     }
 }

@@ -14,6 +14,25 @@ namespace WITS.Migrator.Migrations
         public override string Name => "AuthSchema";
         
         public override string UpScript => @"
+            -- Create the entity table used by the data repository
+            CREATE TABLE IF NOT EXISTS User (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                OrganisationId INTEGER NOT NULL,
+                FirstName TEXT NOT NULL,
+                LastName TEXT NOT NULL,
+                Username TEXT NOT NULL UNIQUE,
+                EmailAddress TEXT NOT NULL UNIQUE,
+                PhoneNumber TEXT,
+                PictureUrl TEXT,
+                PasswordHash TEXT,
+                PasswordSalt TEXT,
+                IsLocked BOOLEAN NOT NULL DEFAULT 0,
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL,
+                LastModified DATETIME,
+                FOREIGN KEY (OrganisationId) REFERENCES Organisation(Id)
+            );
+
             -- Create Users table
             CREATE TABLE IF NOT EXISTS Users (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +116,7 @@ namespace WITS.Migrator.Migrations
             DROP TABLE IF EXISTS UserRoles;
             DROP TABLE IF EXISTS Roles;
             DROP TABLE IF EXISTS RefreshTokens;
+            DROP TABLE IF EXISTS User;
             DROP TABLE IF EXISTS Users;";
     }
 }
