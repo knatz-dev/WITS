@@ -1,0 +1,86 @@
+@page "/login"
+@layout PublicLayout
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Sign in</PageTitle>
+
+<div class="auth-shell">
+    <section class="auth-card">
+        <span class="brand-mark">WITS</span>
+        <h1>Sign in</h1>
+        <p class="muted">Use your work item tracking credentials.</p>
+
+        @if (error is not null)
+        {
+            <div class="alert alert-danger" role="alert">@error</div>
+        }
+
+        <EditForm Model="model" OnValidSubmit="SignInAsync">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label class="label" for="username">Username</label>
+                <InputText id="username" class="input" @bind-Value="model.Username" autocomplete="username" />
+                <ValidationMessage For="() => model.Username" />
+            </div>
+            <div class="field">
+                <label class="label" for="password">Password</label>
+                <InputText id="password" type="password" class="input" @bind-Value="model.Password" autocomplete="current-password" />
+                <ValidationMessage For="() => model.Password" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" disabled="@busy">
+                @(busy ? "Signing in..." : "Sign in")
+            </button>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    [Inject] private WitsApiClient Api { get; set; } = default!;
+    [Inject] private AuthSession Session { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private readonly LoginModel model = new();
+    private string? error;
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/tickets");
+        }
+    }
+
+    private async Task SignInAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            LoginResponse login = await Api.LoginAsync(model.Username.Trim(), model.Password);
+            Session.SignIn(login.Token!, model.Username.Trim());
+            Nav.NavigateTo("/tickets");
+        }
+        catch (WitsApiException exception)
+        {
+            error = exception.Message;
+        }
+        catch (HttpRequestException)
+        {
+            error = "The WITS API is not reachable. Check that it is running and that ApiBaseUrl is correct.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        [Required, StringLength(128)]
+        public string Username { get; set; } = string.Empty;
+
+        [Required, StringLength(1024)]
+        public string Password { get; set; } = string.Empty;
+    }
+}

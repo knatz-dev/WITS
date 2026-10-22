@@ -331,6 +331,12 @@ internal static class AuthenticationAbuseChecks
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string GenerateToken(UserTokenModel userToken) => throw new NotSupportedException();
 
+        public Task<RefreshResult> RefreshAsync(string refreshToken) =>
+            Task.FromResult(new RefreshResult(false, null, null, "Invalid refresh token"));
+
+        public void RevokeRefreshToken(string refreshToken) { }
+        public void RevokeAllRefreshTokens(long userId) { }
+
         public async Task<CredentialResult> ValidateCredentialsAsync(string username, string password)
         {
             if (Interlocked.Increment(ref _calls) == 4) FourEntered.TrySetResult();

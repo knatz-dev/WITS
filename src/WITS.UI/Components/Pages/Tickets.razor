@@ -1,0 +1,133 @@
+@page "/tickets"
+@inject WitsApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Tickets</PageTitle>
+
+<div class="page-heading page-heading-row">
+    <div>
+        <h1>Tickets</h1>
+        <p class="muted">All tickets reported to WITS.</p>
+    </div>
+    <button class="btn btn-ghost" @onclick="LoadAsync" disabled="@loading">Refresh</button>
+</div>
+
+@if (loading)
+{
+    <div class="card empty-state">
+        <div><span class="spinner"></span>Loading tickets...</div>
+    </div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Could not load tickets.</strong>
+        <div>@error</div>
+    </div>
+}
+else if (result is null || result.Items.Count == 0)
+{
+    <div class="card empty-state">No tickets found.</div>
+}
+else
+{
+    <div class="card table-card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Summary</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Priority</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Assignee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (Ticket ticket in result.Items)
+                    {
+                        <tr>
+                            <td><a href="tickets/@ticket.Id">@ticket.TicketRef</a></td>
+                            <td>@ticket.Summary</td>
+                            <td><span class="badge">@ticket.StatusId</span></td>
+                            <td><span class="badge">@ticket.PriorityId</span></td>
+                            <td>@ticket.DateCreated.ToString("yyyy-MM-dd")</td>
+                            <td>@(ticket.Assignee?.ToString() ?? "Unassigned")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            <span class="muted">
+                @result.TotalRecords record(s) &middot; page @result.PageNumber of @Math.Max(result.TotalPages, 1)
+            </span>
+            <div class="pager">
+                <button class="btn btn-ghost btn-sm" disabled="@(loading || page <= 1)" @onclick="PreviousAsync">Previous</button>
+                <button class="btn btn-ghost btn-sm" disabled="@(loading || page >= result.TotalPages)" @onclick="NextAsync">Next</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const int PageSize = 10;
+    private int page = 1;
+    private PagedResult<Ticket>? result;
+    private string? error;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            result = await Api.GetTicketsAsync(page, PageSize);
+        }
+        catch (WitsApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Session.SignOut();
+            Nav.NavigateTo("/login", replace: true);
+        }
+        catch (WitsApiException exception)
+        {
+            error = exception.Message;
+            result = null;
+        }
+        catch (HttpRequestException)
+        {
+            error = "The WITS API is not reachable. Check that it is running and that ApiBaseUrl is correct.";
+            result = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task PreviousAsync()
+    {
+        page--;
+        return LoadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        page++;
+        return LoadAsync();
+    }
+}

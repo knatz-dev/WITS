@@ -1,0 +1,133 @@
+@page "/tickets/{Id:long}"
+@inject WitsApiClient Api
+@inject AuthSession Session
+@inject NavigationManager Nav
+
+<PageTitle>@(ticket is null ? "Ticket" : ticket.TicketRef)</PageTitle>
+
+<div class="page-heading">
+    <a class="back-link" href="tickets">&larr; Back to tickets</a>
+    <h1>@(ticket is null ? "Ticket" : ticket.TicketRef)</h1>
+</div>
+
+@if (loading)
+{
+    <div class="card empty-state">
+        <div><span class="spinner"></span>Loading ticket...</div>
+    </div>
+}
+else if (error is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Could not load the ticket.</strong>
+        <div>@error</div>
+    </div>
+}
+else if (ticket is null)
+{
+    <div class="alert alert-warning" role="alert">Ticket @Id was not found.</div>
+}
+else
+{
+    <div class="card">
+        <h2>@ticket.Summary</h2>
+        <p class="muted">@ticket.ProjectCode &middot; @ticket.Reference</p>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Status</dt>
+                <dd><span class="badge">@ticket.StatusId</span></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Priority</dt>
+                <dd><span class="badge">@ticket.PriorityId</span></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Type</dt>
+                <dd>@ticket.TypeId</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Created</dt>
+                <dd>@ticket.DateCreated.ToString("yyyy-MM-dd HH:mm")</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Resolved</dt>
+                <dd>@(ticket.DateResolved == default ? "Not resolved" : ticket.DateResolved.ToString("yyyy-MM-dd HH:mm"))</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Logged by</dt>
+                <dd>@ticket.LoggedByUsername</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Reported by</dt>
+                <dd>@ticket.ReportedByUsername</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Assignee</dt>
+                <dd>@(ticket.Assignee?.ToString() ?? "Unassigned")</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact email</dt>
+                <dd>@(string.IsNullOrWhiteSpace(ticket.ContactEmail) ? "—" : ticket.ContactEmail)</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Description</dt>
+                <dd>@(string.IsNullOrWhiteSpace(ticket.Description) ? "—" : ticket.Description)</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Details</dt>
+                <dd>@(string.IsNullOrWhiteSpace(ticket.Details) ? "—" : ticket.Details)</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Next action</dt>
+                <dd>@ticket.NextAction</dd>
+            </div>
+        </dl>
+    </div>
+}
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private Ticket? ticket;
+    private string? error;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            ticket = await Api.GetTicketAsync(Id);
+        }
+        catch (WitsApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Session.SignOut();
+            Nav.NavigateTo("/login", replace: true);
+        }
+        catch (WitsApiException exception)
+        {
+            error = exception.Message;
+        }
+        catch (HttpRequestException)
+        {
+            error = "The WITS API is not reachable. Check that it is running and that ApiBaseUrl is correct.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

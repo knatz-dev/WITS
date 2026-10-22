@@ -22,14 +22,18 @@ using static WITS.Services.IAuthService;
 
 namespace WITS.Services;
 
-public record CredentialResult(bool Success, string? Token, string Message = "");
+public record CredentialResult(bool Success, string? Token, string? RefreshToken = null, string Message = "");
 public record RegistrationResult(bool Success, string Message = "", bool Conflict = false);
+public record RefreshResult(bool Success, string? AccessToken, string? RefreshToken, string Message = "");
 
 public interface IAuthService
 {
     string GenerateToken(UserTokenModel userToken);
     Task<CredentialResult> ValidateCredentialsAsync(string username, string password);
     Task<RegistrationResult> RegisterUserAsync(RegisterRequest user);
+    Task<RefreshResult> RefreshAsync(string refreshToken);
+    void RevokeRefreshToken(string refreshToken);
+    void RevokeAllRefreshTokens(long userId);
 }
 
 public class AuthService : IAuthService
@@ -41,13 +45,15 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthService> _logger;
     private readonly LoginAttemptTracker _loginAttempts;
+    private readonly RefreshTokenStore _refreshTokens;
 
-    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger, LoginAttemptTracker loginAttempts)
+    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger, LoginAttemptTracker loginAttempts, RefreshTokenStore refreshTokens)
     {
         _userRepository = unitOfWork.GetRepository<User, long>();
         _jwtSettings = jwtSettings.Value;
         _logger = logger;
         _loginAttempts = loginAttempts;
+        _refreshTokens = refreshTokens;
     }
 
     public string GenerateToken(UserTokenModel userToken)
@@ -171,12 +177,59 @@ public class AuthService : IAuthService
             EmailAddress = user.EmailAddress,
             OrganisationId = user.OrganisationId,
         });
+        var refreshToken = _refreshTokens.Issue(user.Id);
 
         _logger.LogInformation("Login succeeded for {Username} after {ElapsedMs} ms",
             username, stopwatch.ElapsedMilliseconds);
-        return new CredentialResult(true, token);
+        return new CredentialResult(true, token, refreshToken);
     }
  
+    public Task<RefreshResult> RefreshAsync(string refreshToken)
+    {
+        var (userId, newRefresh, reused) = _refreshTokens.Rotate(refreshToken);
+        if (reused)
+        {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "refresh_reuse"));
+            _logger.LogWarning("Refresh token reuse detected; revoked the affected token family");
+            return Task.FromResult(new RefreshResult(false, null, null, "Invalid refresh token"));
+        }
+        if (userId is null || newRefresh is null)
+        {
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "refresh_invalid"));
+            return Task.FromResult(new RefreshResult(false, null, null, "Invalid refresh token"));
+        }
+
+        return CompleteRefreshAsync(userId.Value, newRefresh);
+    }
+
+    private async Task<RefreshResult> CompleteRefreshAsync(long userId, string newRefresh)
+    {
+        User? user;
+        try { user = await _userRepository.GetByIdAsync(userId); }
+        catch { user = null; }
+        if (user is null || user.IsLocked)
+        {
+            _refreshTokens.RevokeAll(userId);
+            OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "account_locked"));
+            _logger.LogWarning("Refresh rejected for user {UserId}: account unavailable or locked", userId);
+            return new RefreshResult(false, null, null, "Invalid refresh token");
+        }
+
+        var accessToken = GenerateToken(new UserTokenModel
+        {
+            Id = user.Id,
+            Username = user.Username,
+            EmailAddress = user.EmailAddress,
+            OrganisationId = user.OrganisationId
+        });
+        _logger.LogInformation("Refresh succeeded for {Username}", user.Username);
+        return new RefreshResult(true, accessToken, newRefresh);
+    }
+
+    public void RevokeRefreshToken(string refreshToken) => _refreshTokens.Revoke(refreshToken);
+
+    public void RevokeAllRefreshTokens(long userId) => _refreshTokens.RevokeAll(userId);
+
     public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
     {
         if (string.IsNullOrWhiteSpace(user.Username) || user.Username.Length > 128

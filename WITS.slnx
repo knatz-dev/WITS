@@ -15,8 +15,10 @@
     <Project Path="src/WITS.Data/WITS.Data.csproj" />
     <Project Path="src/WITS.Models/WITS.Models.csproj" />
     <Project Path="src/WITS.Services/WITS.Services.csproj" />
+    <Project Path="src/WITS.UI/WITS.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/WITS.Api.EndpointTests/WITS.Api.EndpointTests.csproj" />
     <Project Path="tests/WITS.Api.SmokeTests/WITS.Api.SmokeTests.csproj" />
   </Folder>
   <Folder Name="/tools/">

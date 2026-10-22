@@ -41,7 +41,7 @@ internal static class IdentityClaimsChecks
         };
 
         var authService = new AuthService(new StubUnitOfWork(account), Options.Create(settings), NullLogger<AuthService>.Instance,
-            new LoginAttemptTracker(TimeProvider.System));
+            new LoginAttemptTracker(TimeProvider.System), new RefreshTokenStore(TimeProvider.System));
         var issued = await authService.ValidateCredentialsAsync(account.Username, Password);
         if (!issued.Success || string.IsNullOrEmpty(issued.Token))
         {
@@ -117,7 +117,7 @@ internal static class IdentityClaimsChecks
         public Task<PagedResult<User>> GetAllAsync(int pageNumber = 1, int pageSize = 100) =>
             throw new NotImplementedException();
 
-        public Task<User?> GetByIdAsync(long id) => throw new NotImplementedException();
+        public Task<User?> GetByIdAsync(long id) => Task.FromResult(id == account.Id ? account : null);
 
         public Task<int> InsertAsync(User model) => throw new NotImplementedException();
 

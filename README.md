@@ -65,8 +65,8 @@ Before serving requests, the API checks:
 
 - `JwtSettings:Issuer` and `JwtSettings:Audience` are nonblank.
 - `JwtSettings:SecurityKey` is nonblank and at least **32 UTF-8 bytes** for HS256.
-- The sample signing key is rejected outside `Development`. Supply a randomly
-  generated deployment key through `JwtSettings__SecurityKey` or your secret store.
+- The base config ships no signing key. Supply a randomly generated deployment
+  key through `JwtSettings__SecurityKey` or your secret store.
 - `JwtSettings:ExpirationMinutes` is a positive integer.
 - The configured SQLite database can be opened and written, including access to
   its journal directory. A metadata write is rolled back; existing data, schema,
@@ -78,6 +78,28 @@ Token signing and verification use the same validated settings and UTF-8 key
 encoding. Previously issued tokens using non-ASCII keys need to be reissued
 because older code used ASCII encoding. Restart after changing JWT or database
 settings.
+
+## Deployment signing secret
+
+The repository contains no usable production signing key. The base configuration
+sets `JwtSettings:SecurityKey` to `null`; `appsettings.Development.json` carries
+an insecure Development-only key that is never valid outside Development. Generate
+a deployment key of at least 32 UTF-8 bytes and provide it outside source control:
+
+```powershell
+$bytes = [System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)
+$env:JwtSettings__SecurityKey = [Convert]::ToBase64String($bytes)
+```
+
+Store it in your deployment secret store, container secret, or ASP.NET Core user
+secrets. The same key must be present on every API instance that must accept
+tokens issued by another instance. Key replacement is a restart-and-reissue event:
+changing `SecurityKey` invalidates all outstanding access tokens, so clients
+re-authenticate after deployment. There is no dual-key or rolling validation
+support; plan replacement during a maintenance window or accept the resulting
+re-login. Keep the previous key available only long enough to diagnose issues;
+do not commit it. No example credential remains in source or packaged artifacts;
+build output is regenerated from the null default.
 
 ## Error responses
 
@@ -157,6 +179,26 @@ shared atomic lockout store and shared ingress enforcement before multi-instance
 deployment or when lockouts must survive restart. No database schema change is
 needed for this single-process implementation.
 
+## Session lifetime and revocation
+
+Login issues a short-lived access token plus an opaque refresh token. Refresh
+tokens live **7 days** and rotate on every use: each successful refresh returns
+a new refresh token and invalidates the previous one. Re-presenting a rotated
+token is treated as reuse and revokes the entire token family. Expired, revoked,
+or unknown refresh tokens are rejected.
+
+Endpoints:
+
+- `POST /api/v1/auth/refresh` — `{ "refreshToken": "..." }` returns a new
+  access/refresh token pair.
+- `POST /api/v1/auth/logout` — `{ "refreshToken": "..." }` revokes one token.
+
+Locking an account (`User.IsLocked`) blocks new logins and refresh, and revokes
+all of that account's refresh tokens. Already-issued access tokens are stateless
+JWTs and remain valid until their expiry; they cannot be revoked before expiry.
+Refresh tokens are currently process-local and reset on restart; use a shared
+persistent store before multi-instance deployment.
+
 ## Token claims
 
 Access tokens identify an account with:
@@ -200,9 +242,15 @@ contract.
 ## Verification
 
 ```sh
+dotnet test tests/WITS.Api.EndpointTests
 dotnet run --project tests/WITS.Api.SmokeTests
 ```
 
-This executable smoke check covers startup validation, error responses, DI, and database targeting with isolated
+The xUnit endpoint suite runs every mapped route against an in-memory host: success,
+authentication, missing resource, duplicate/invalid input, and unreadable-body cases,
+plus a coverage check that fails if a route has no contract case. See
+[the endpoint tests](tests/WITS.Api.EndpointTests/EndpointContractTests.cs).
+
+The executable smoke check covers startup validation, error responses, DI, and database targeting with isolated
 fixtures. See [its README](tests/WITS.Api.SmokeTests/README.md) for scope. Run it
 explicitly; `dotnet test` does not execute it.

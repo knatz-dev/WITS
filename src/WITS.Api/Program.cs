@@ -88,6 +88,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddAuthenticationRateLimits();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginAttemptTracker>();
+builder.Services.AddSingleton<RefreshTokenStore>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();

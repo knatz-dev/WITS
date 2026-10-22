@@ -1,0 +1,45 @@
+﻿@page "/"
+@inject AuthSession Session
+@inject IConfiguration Config
+
+<PageTitle>Dashboard</PageTitle>
+
+<section class="page-heading">
+    <h1>Work item tracking</h1>
+    <p class="muted">A lightweight admin view over the WITS ticket API.</p>
+</section>
+
+<section class="stat-grid">
+    <article class="card">
+        <p class="eyebrow">Tickets</p>
+        <p class="stat-value">Queue</p>
+        <p class="muted">Browse all tickets with paging and open a ticket for its full detail.</p>
+        <a class="btn btn-primary push" href="tickets">Open tickets</a>
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">Session</p>
+        @if (Session.IsAuthenticated)
+        {
+            <p class="stat-value">@Session.Username</p>
+            <p class="muted">The access token is kept for this browser session only.</p>
+        }
+        else
+        {
+            <p class="stat-value">Signed out</p>
+            <p class="muted">Sign in with your WITS credentials to view tickets.</p>
+            <a class="btn btn-ghost push" href="login">Sign in</a>
+        }
+    </article>
+
+    <article class="card">
+        <p class="eyebrow">API reference</p>
+        <p class="stat-value">Scalar</p>
+        <p class="muted">The API serves its OpenAPI reference in Development.</p>
+        <a class="btn btn-ghost push" href="@ScalarUrl" target="_blank" rel="noreferrer">Open API docs</a>
+    </article>
+</section>
+
+@code {
+    private string ScalarUrl => $"{Config["ApiBaseUrl"] ?? "http://localhost:5351"}/scalar";
+}

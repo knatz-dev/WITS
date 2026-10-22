@@ -191,7 +191,13 @@ internal static class ErrorResponseChecks
         public string GenerateToken(UserTokenModel userToken) => throw new NotImplementedException();
 
         public Task<CredentialResult> ValidateCredentialsAsync(string username, string password) =>
-            Task.FromResult(new CredentialResult(false, null, "Invalid credentials"));
+            Task.FromResult(new CredentialResult(false, null, null, "Invalid credentials"));
+
+    public Task<RefreshResult> RefreshAsync(string refreshToken) =>
+            Task.FromResult(new RefreshResult(false, null, null, "Invalid refresh token"));
+
+    public void RevokeRefreshToken(string refreshToken) { }
+    public void RevokeAllRefreshTokens(long userId) { }
 
         public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user) =>
             Task.FromResult(user.Username == "duplicate"
