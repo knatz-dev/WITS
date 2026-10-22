@@ -345,13 +345,25 @@ namespace WITS.Migrator
                 table.AddColumn(new TableColumn("[blue]Name[/]").Centered());
                 table.AddColumn(new TableColumn("[blue]Status[/]").Centered());
 
+                var failedRemovals = new List<string>();
                 foreach (var migration in pendingMigrations)
                 {
-                    RemoveMigrationFile(migration.MigrationId);
-                    table.AddRow(migration.MigrationId, migration.Name, "[red]Removed[/]");
+                    var removed = RemoveMigrationFile(migration.MigrationId);
+                    table.AddRow(migration.MigrationId, migration.Name, removed ? "[green]Removed[/]" : "[red]Failed[/]");
+                    if (!removed)
+                    {
+                        failedRemovals.Add(migration.MigrationId);
+                    }
                 }
 
                 AnsiConsole.Write(table);
+
+                if (failedRemovals.Count > 0)
+                {
+                    AnsiConsole.MarkupLine($"[red]Could not remove {failedRemovals.Count} migration file(s): {string.Join(", ", failedRemovals)}[/]");
+                    return 1;
+                }
+
                 AnsiConsole.MarkupLine($"[green]Removed {pendingMigrations.Count} pending migration(s).[/]");
             }
             else
@@ -370,18 +382,24 @@ namespace WITS.Migrator
                 }
 
 
-                RemoveMigrationFile(migrationId);
+                if (!RemoveMigrationFile(migrationId))
+                {
+                    AnsiConsole.MarkupLine($"[red]Could not remove migration {migrationId}[/]");
+                    return 1;
+                }
+
                 AnsiConsole.MarkupLine($"[green]Removed migration {migrationId}[/]");
             }
 
             return 0;
         }
 
-        public static void RemoveMigrationFile(string migrationId)
+        public static bool RemoveMigrationFile(string migrationId)
         {
             var migrationsPath = Path.Combine(Directory.GetCurrentDirectory(), "Migrations");
             var files = Directory.GetFiles(migrationsPath, $"{migrationId}_*.cs");
 
+            var removedAll = true;
             foreach (var file in files)
             {
                 try
@@ -392,8 +410,11 @@ namespace WITS.Migrator
                 catch (Exception ex)
                 {
                     AnsiConsole.MarkupLine($"[red]Error deleting file {file}: {ex.Message}[/]");
+                    removedAll = false;
                 }
             }
+
+            return removedAll;
         }
 
         /// <summary>

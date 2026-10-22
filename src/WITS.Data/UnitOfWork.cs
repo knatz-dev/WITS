@@ -9,7 +9,7 @@ namespace WITS.Data;
 public interface IUnitOfWork : IDisposable
 {
     IGenericRepository<T, TId> GetRepository<T, TId>() where T : BaseEntity<TId>;
-    void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
+    void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.Serializable);
     void Commit();
     void Rollback();
 }
@@ -31,7 +31,7 @@ public sealed class UnitOfWork : IUnitOfWork
         }
     }
 
-    public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
+    public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
         if (_connection == null)
         {
@@ -63,9 +63,13 @@ public sealed class UnitOfWork : IUnitOfWork
         var type = typeof(T);
         if (!_repositories.ContainsKey(type))
         {
+            // The repository borrows this unit of work's shared connection and reads the
+            // live transaction instead of a construction-time snapshot, so it joins
+            // transactions started after the repository was cached.
             var instance = new GenericRepository<T, TId>(
                 new StaticConnectionFactory(_connection),
-                _transaction
+                () => _transaction,
+                ownsConnection: false
             );
             _repositories[type] = instance;
         }

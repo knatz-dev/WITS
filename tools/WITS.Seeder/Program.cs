@@ -16,6 +16,14 @@ using var config = DatabaseConfiguration.LoadToolConfiguration(args);
 var connectionString = DatabaseConfiguration.GetConnectionString(config);
 Console.WriteLine($"Database: {new SqliteConnectionStringBuilder(connectionString).DataSource}");
 
-DbInitializer.Initialize(new SQliteConnectionFactory(connectionString));
+try
+{
+    DbInitializer.Initialize(new SQliteConnectionFactory(connectionString));
+}
+catch (Exception ex)
+{
+    await Console.Error.WriteLineAsync($"Seeding failed: {ex}");
+    return 1;
+}
 
-Console.ReadLine();
+return 0;

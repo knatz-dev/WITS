@@ -4,10 +4,12 @@
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using WITS.Common;
@@ -34,11 +36,13 @@ public class AuthService : IAuthService
 {
     private readonly IGenericRepository<User, long> _userRepository;
     private readonly JwtSettings _jwtSettings;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings)
+    public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger)
     {
         _userRepository = unitOfWork.GetRepository<User, long>();
         _jwtSettings = jwtSettings.Value;
+        _logger = logger;
     }
 
     public string GenerateToken(UserTokenModel userToken)
@@ -72,6 +76,7 @@ public class AuthService : IAuthService
 
     public async Task<CredentialResult> ValidateCredentialsAsync(string username, string password)
     {
+        var stopwatch = Stopwatch.StartNew();
         var filter = new GenericFilter
         {
             PageNumber = 1,
@@ -87,18 +92,24 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
+            _logger.LogWarning("Login failed for {Username}: unknown account after {ElapsedMs} ms",
+                username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "User account not found!");
         }
 
         // Check if user is locked
         if (user.IsLocked)
         {
+            _logger.LogWarning("Login failed for {Username}: account locked after {ElapsedMs} ms",
+                username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "User account is locked. Please contact support.");
         }
 
         // If password is null or empty, return invalid credentials
         if (string.IsNullOrEmpty(password))
         {
+            _logger.LogWarning("Login failed for {Username}: empty password after {ElapsedMs} ms",
+                username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "Password cannot be empty");
         }
 
@@ -108,6 +119,8 @@ public class AuthService : IAuthService
         // Use salt and hash for verification
         if (!hashMatched)
         {
+            _logger.LogWarning("Login failed for {Username}: password mismatch after {ElapsedMs} ms",
+                username, stopwatch.ElapsedMilliseconds);
             return new CredentialResult(false, null, "Invalid credentials");
         }
 
@@ -120,6 +133,8 @@ public class AuthService : IAuthService
             OrganisationId = user.OrganisationId,
         });
 
+        _logger.LogInformation("Login succeeded for {Username} after {ElapsedMs} ms",
+            username, stopwatch.ElapsedMilliseconds);
         return new CredentialResult(true, token);
     }
  
@@ -136,9 +151,12 @@ public class AuthService : IAuthService
             }
         };
 
+        var stopwatch = Stopwatch.StartNew();
         var existing = await _userRepository.QueryAsync(filter);
         if (existing.Items.Any())
         {
+            _logger.LogWarning("Registration rejected for {Username}: username already exists after {ElapsedMs} ms",
+                user.Username, stopwatch.ElapsedMilliseconds);
             return new RegistrationResult(false, "Username already exists", Conflict: true);
         }
 
@@ -160,6 +178,8 @@ public class AuthService : IAuthService
             OrganisationId = user.OrganisationId,
             PhoneNumber = user.TelephoneNos
         });
+        _logger.LogInformation("Registered user {Username} with id {UserId} after {ElapsedMs} ms",
+            user.Username, id, stopwatch.ElapsedMilliseconds);
         return new RegistrationResult(true, $"User registered successfully with id {id}.");
     }
 

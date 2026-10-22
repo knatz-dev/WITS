@@ -2,6 +2,7 @@ using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using WITS.Common;
@@ -39,7 +40,7 @@ internal static class IdentityClaimsChecks
             PasswordSalt = salt
         };
 
-        var authService = new AuthService(new StubUnitOfWork(account), Options.Create(settings));
+        var authService = new AuthService(new StubUnitOfWork(account), Options.Create(settings), NullLogger<AuthService>.Instance);
         var issued = await authService.ValidateCredentialsAsync(account.Username, Password);
         if (!issued.Success || string.IsNullOrEmpty(issued.Token))
         {
@@ -85,12 +86,12 @@ internal static class IdentityClaimsChecks
         }
     }
 
-    private sealed class StubUnitOfWork(User account) : IUnitOfWork
+    internal sealed class StubUnitOfWork(User account) : IUnitOfWork
     {
         public IGenericRepository<T, TId> GetRepository<T, TId>() where T : BaseEntity<TId> =>
             (IGenericRepository<T, TId>)(object)new StubUserRepository(account);
 
-        public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted) =>
+        public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.Serializable) =>
             throw new NotSupportedException("The stub unit of work does not manage transactions.");
 
         public void Commit() => throw new NotSupportedException("The stub unit of work does not manage transactions.");
@@ -100,7 +101,7 @@ internal static class IdentityClaimsChecks
         public void Dispose() => GC.SuppressFinalize(this);
     }
 
-    private sealed class StubUserRepository(User account) : IGenericRepository<User, long>
+    internal sealed class StubUserRepository(User account) : IGenericRepository<User, long>
     {
         public Task<PagedResult<User>> QueryAsync(GenericFilter filter)
         {

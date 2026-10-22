@@ -61,6 +61,8 @@ Console.WriteLine("PASS: API startup, configured SQLite factory, service resolut
 PasswordStorageChecks.Run();
 await IdentityClaimsChecks.RunAsync();
 await ErrorResponseChecks.RunAsync();
+await DiagnosticsChecks.RunAsync();
 await RepositoryFailureChecks.RunAsync();
+await TransactionOwnershipChecks.RunAsync();
 await StartupConfigurationChecks.RunAsync();
 await DatabaseTargetChecks.RunAsync();

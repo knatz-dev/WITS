@@ -96,7 +96,8 @@ internal static class DatabaseTargetChecks
                 Require((long)(await command.ExecuteScalarAsync())! == 0, "Rollback used a different database.");
             }
             Require(!File.Exists(decoy), "A tool used the working-directory database instead of the explicit target.");
-            Console.WriteLine("PASS: API/tool JSON, environment and CLI targets; migration bootstrap/inspection/rollback target isolation.");
+            await CheckMaintenanceOutcomesAsync(migrator, seeder, temporary, environment);
+            Console.WriteLine("PASS: API/tool JSON, environment and CLI targets; migration bootstrap/inspection/rollback target isolation; maintenance-tool failure exit codes.");
         }
         finally
         {
@@ -138,7 +139,7 @@ internal static class DatabaseTargetChecks
         // Seeder data/transaction correctness is tracked separately; this checks its actual opened file.
     }
 
-    private static async Task<(int ExitCode, string Output)> RunToolAsync(string executable, string workingDirectory, string environment, string[] args)
+    private static async Task<(int ExitCode, string Output)> RunToolAsync(string executable, string workingDirectory, string environment, string[] args, bool keepStdinOpen = false)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -156,7 +157,10 @@ internal static class DatabaseTargetChecks
             start.ArgumentList.Add(argument);
         }
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the database tool.");
-        process.StandardInput.Close();
+        if (!keepStdinOpen)
+        {
+            process.StandardInput.Close();
+        }
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -173,6 +177,55 @@ internal static class DatabaseTargetChecks
             }
         }
         return (process.ExitCode, await output + await error);
+    }
+
+    private static async Task CheckMaintenanceOutcomesAsync(string migrator, string seeder, string temporary, string environment)
+    {
+        // Failures must exit nonzero, and tools must not wait for console input: stdin stays open here,
+        // so any console pause would block until the run is killed instead of exiting with a code.
+        var seedTarget = Path.Combine(temporary, "maintenance-seed.db");
+        var seeding = await RunToolAsync(seeder, temporary, environment,
+            ["--ConnectionStrings:DefaultConnection", ConnectionString(seedTarget)], keepStdinOpen: true);
+        Require(seeding.ExitCode == 1 && seeding.Output.Contains("Seeding failed", StringComparison.Ordinal),
+            $"Seeder failures must report the failure and exit nonzero: exit {seeding.ExitCode}, {seeding.Output}");
+
+        // Migration removal must not report success when a file cannot be deleted.
+        var sandbox = Path.Combine(temporary, "remove-sandbox");
+        var migrationsDirectory = Path.Combine(sandbox, "Migrations");
+        Directory.CreateDirectory(migrationsDirectory);
+        var lockedFile = Path.Combine(migrationsDirectory, "20250419113613_AuthSchema.cs");
+        var unlockedFile = Path.Combine(migrationsDirectory, "20250419115950_OrganizationAndActivitySchema.cs");
+        await File.WriteAllTextAsync(lockedFile, "// sandbox migration file");
+        await File.WriteAllTextAsync(unlockedFile, "// sandbox migration file");
+        var removeTarget = Path.Combine(temporary, "maintenance-remove.db");
+        string[] removeOptions = ["--ConnectionStrings:DefaultConnection", ConnectionString(removeTarget)];
+
+        // Holding a file open blocks deletion only on Windows; elsewhere deletion simply succeeds.
+        if (OperatingSystem.IsWindows())
+        {
+            using (new FileStream(lockedFile, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var locked = await RunToolAsync(migrator, sandbox, environment,
+                    ["remove", "20250419113613", .. removeOptions]);
+                Require(locked.ExitCode == 1 && File.Exists(lockedFile),
+                    $"A failed file deletion must exit nonzero and keep the file: exit {locked.ExitCode}, {locked.Output}");
+
+                var all = await RunToolAsync(migrator, sandbox, environment,
+                    ["remove", "all", .. removeOptions]);
+                Require(all.ExitCode == 1 && File.Exists(lockedFile),
+                    $"Removal of many must report failed deletions: exit {all.ExitCode}, {all.Output}");
+            }
+        }
+
+        var removed = await RunToolAsync(migrator, sandbox, environment,
+            ["remove", "20250419113613", .. removeOptions]);
+        Require(removed.ExitCode == 0 && !File.Exists(lockedFile),
+            $"Removal must exit zero and delete the file: exit {removed.ExitCode}, {removed.Output}");
+
+        var unlocked = await RunToolAsync(migrator, sandbox, environment,
+            ["remove", "20250419115950", .. removeOptions]);
+        Require(unlocked.ExitCode == 0 && !File.Exists(unlockedFile),
+            $"Removal must exit zero and delete the requested file: exit {unlocked.ExitCode}, {unlocked.Output}");
     }
 
     private static void CheckRejectedTarget(string? value)

@@ -27,10 +27,19 @@ internal static class DbInitializer
             SeedUsers(uow);
             uow.Commit();
         }
-        catch (Exception ex)
+        catch
         {
-            uow.Rollback();
-            Console.WriteLine($"An error occurred while seeding the database: {ex.Message}");
+            try
+            {
+                uow.Rollback();
+            }
+            catch (Exception rollbackException)
+            {
+                Console.Error.WriteLine($"Rollback after failed seeding also failed: {rollbackException.Message}");
+            }
+
+            // Rethrow so the entrypoint reports the seeding failure and exits nonzero.
+            throw;
         }
     }
 

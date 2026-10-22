@@ -102,6 +102,16 @@ _ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;
 await DatabaseConfiguration.ValidateAccessAsync(app.Services.GetRequiredService<IDbConnectionFactory>());
 
 // Configure the HTTP request pipeline.
+// The scope must wrap the exception handler so failure logs carry the same trace id the client receives.
+var requestLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RequestCorrelation");
+app.Use(async (context, next) =>
+{
+    using (requestLogger.BeginScope("Request {TraceId}", context.TraceIdentifier))
+    {
+        await next(context);
+    }
+});
+
 app.UseExceptionHandler();
 
 // Minimal-API binding failures end the request with a bare 400, so give them the shared problem shape.

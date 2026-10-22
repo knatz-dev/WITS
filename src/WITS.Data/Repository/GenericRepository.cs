@@ -13,15 +13,19 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
     private static readonly string TypeName = typeof(T).Name;
 
     private readonly IDbConnectionFactory _connectionFactory;
-    private readonly IDbTransaction? _transaction;
+    private readonly Func<IDbTransaction?>? _currentTransaction;
+    private readonly bool _ownsConnection;
     private readonly string _tableName;
     private readonly List<string> _columnNames;
     private readonly string _primaryKeyColumn;
 
-    public GenericRepository(IDbConnectionFactory connectionFactory, IDbTransaction? transaction = null)
+    public GenericRepository(IDbConnectionFactory connectionFactory, Func<IDbTransaction?>? currentTransaction = null, bool ownsConnection = true)
     {
         _connectionFactory = connectionFactory;
-        _transaction = transaction;
+        _currentTransaction = currentTransaction;
+        // The unit of work borrows its shared connection; standalone factories hand out
+        // per-call connections that this instance must release after each operation.
+        _ownsConnection = ownsConnection;
         _tableName = TypeName;
 
         var props = typeof(T).GetProperties();
@@ -35,11 +39,15 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                             ?? "Id";
     }
 
+    // Live view of the owning transaction: repositories cached before BeginTransaction must still enlist.
+    private IDbTransaction? Transaction => _currentTransaction?.Invoke();
+
     public async Task<T?> GetByIdAsync(TDataType id)
     {
         var query = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @Id";
-        using var connection = await _connectionFactory.CreateConnectionAsync();
-        return await connection.QuerySingleOrDefaultAsync<T>(query, new { Id = id }, _transaction);
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
+        return await connection.QuerySingleOrDefaultAsync<T>(query, new { Id = id }, Transaction);
     }
 
     public async Task<int> InsertAsync(T model)
@@ -50,8 +58,9 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                      SELECT last_insert_rowid();
                      """;
 
-        using var connection = await _connectionFactory.CreateConnectionAsync();
-        var id = await connection.ExecuteScalarAsync<long>(query, model, _transaction);
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
+        var id = await connection.ExecuteScalarAsync<long>(query, model, Transaction);
         return (int)id;
     }
 
@@ -60,25 +69,28 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         var setClause = string.Join(", ", _columnNames.Select(prop => $"{prop} = @{prop}"));
         var query = $"UPDATE {_tableName} SET {setClause} WHERE {_primaryKeyColumn} = @Id";
 
-        using var connection = await _connectionFactory.CreateConnectionAsync();
-        var rows = await connection.ExecuteAsync(query, model, _transaction);
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
+        var rows = await connection.ExecuteAsync(query, model, Transaction);
         return rows > 0;
     }
 
     public async Task<bool> DeleteByIdAsync(TDataType id)
     {
         var query = $"DELETE FROM {_tableName} WHERE {_primaryKeyColumn} = @Id";
-        using var connection = await _connectionFactory.CreateConnectionAsync();
-        var rows = await connection.ExecuteAsync(query, new { Id = id }, _transaction);
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
+        var rows = await connection.ExecuteAsync(query, new { Id = id }, Transaction);
         return rows > 0;
     }
 
     public async Task<PagedResult<T>> GetAllAsync(int pageNumber = 1, int pageSize = 100)
     {
-        using var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
 
         var totalQuery = $"SELECT COUNT(*) FROM {_tableName} WHERE IsDeleted = 0";
-        var totalRecords = await connection.ExecuteScalarAsync<int>(totalQuery, _transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(totalQuery, Transaction);
 
         var offset = (pageNumber - 1) * pageSize;
 
@@ -93,14 +105,15 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", pageSize);
 
-        var items = (await connection.QueryAsync<T>(query, parameters, _transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(query, parameters, Transaction)).ToList();
 
         return new PagedResult<T>(items, totalRecords, pageNumber, pageSize);
     }
 
     public async Task<PagedResult<T>> QueryAsync(GenericFilter filter)
     {
-        using var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
 
         var parameters = new DynamicParameters();
         var whereConditions = new List<string> { "IsDeleted = 0" };
@@ -158,7 +171,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         var whereClause = whereConditions.Count > 0 ? $"WHERE {string.Join(" AND ", whereConditions)}" : "";
 
         var countQuery = $"SELECT COUNT(*) FROM {_tableName} {whereClause}";
-        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, _transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, Transaction);
 
         var sortColumn = !string.IsNullOrWhiteSpace(filter.SortColumn) && _columnNames.Contains(filter.SortColumn)
             ? filter.SortColumn
@@ -177,14 +190,15 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", filter.PageSize);
 
-        var items = (await connection.QueryAsync<T>(query, parameters, _transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(query, parameters, Transaction)).ToList();
 
         return new PagedResult<T>(items, totalRecords, filter.PageNumber, filter.PageSize);
     }
 
     public async Task<PagedResult<T>> SearchAsync(SearchParams searchParams)
     {
-        using var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync();
+        using var owned = _ownsConnection ? connection : null;
 
         var ftsTable = $"{_tableName}FTS";
 
@@ -203,7 +217,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                           AND main.OrganisationId = @OrganisationId
                           """;
 
-        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, _transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, Transaction);
 
         var searchQuery = $"""
                            SELECT main.*, bm25(fts) AS Relevance
@@ -216,7 +230,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                            LIMIT @PageSize OFFSET @Offset
                            """;
 
-        var items = (await connection.QueryAsync<T>(searchQuery, parameters, _transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(searchQuery, parameters, Transaction)).ToList();
 
         return new PagedResult<T>(items, totalRecords, searchParams.PageNumber, searchParams.PageSize);
     }

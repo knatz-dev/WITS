@@ -18,6 +18,10 @@ Password-storage checks assert that a freshly hashed password round-trips, that 
 
 Identity checks run real credential validation against a stubbed account and require the issued token to authenticate, resolve `name` to the username, carry `ClaimTypes.NameIdentifier` subject `42`, the account email, and an `OrganisationId` claim using organisation naming — with no role claim, no display-name value anywhere in the token, and no token for a wrong password.
 
+Diagnostics checks run the real `AuthService` through HTTP against a capturing log provider and require successful and failed logins to log their outcome with elapsed time, the unhandled-failure log entry to carry the trace id the client received in its 500 body, and no captured entry to contain a password or an issued token.
+
+Transaction-ownership checks run multiple operations, a commit (verified visible through a separate connection), a rollback, and repository reuse across transaction boundaries on a temporary SQLite database, and require the unit of work to be the sole connection owner with live transaction enlistment.
+
 It also runs the real migrator and seeder against temporary SQLite files and checks:
 
 - Environment JSON, environment-variable overrides, and CLI overrides select the same file as the API.
@@ -25,7 +29,8 @@ It also runs the real migrator and seeder against temporary SQLite files and che
 - Tool settings come from the executable directory even with conflicting JSON in the working directory.
 - Missing/relative paths are rejected; absolute paths containing spaces, equals signs, and semicolons work.
 - Migration bootstrap, history inspection, and rollback use the explicit target, without touching a decoy database.
+- Maintenance outcomes are reliable: the seeder reports a real seeding failure and exits nonzero with stdin held open (no console wait), migration removal exits nonzero and keeps the file when a deletion fails (`remove <id>` and `remove all`, using an exclusively-open file on Windows), and successful removal exits zero and deletes the file.
 
-The seeder check verifies the file it opens, not successful data insertion. The migration-application check verifies history-table bootstrap on the selected file; the existing count-cast defect still blocks up-scripts. A synthetic history row exercises rollback independently. These known defects remain separate checklist items.
+The seeder check verifies the file it opens; a separate check asserts its nonzero failure exit, since insertion itself still fails on the current schema. The migration-application check verifies history-table bootstrap on the selected file; the existing count-cast defect still blocks up-scripts. A synthetic history row exercises rollback independently. These known defects remain separate checklist items.
 
 Run this explicitly; it is not a `dotnet test` project. Temporary databases and environment JSON fixtures are removed after the run. Real credential storage, password verification, ticket-service behavior, and production data/filesystem permissions are not exercised.

@@ -124,6 +124,22 @@ No role claim is issued. Roles must come from granted role assignments, which
 nothing reads yet (checklist: role/permission evaluation), so authorization
 today depends only on a valid identity.
 
+## Logging and diagnostics
+
+Every request runs inside a log scope (request path, hosting request id, and a
+`RequestCorrelation` scope), so entries for one request group together; the
+console formatter prints scopes (`Console:IncludeScopes`). Application services
+log operation outcomes with structured state: login success or failure and
+registration success or conflict carry the account name, the failure reason,
+and elapsed milliseconds. Unhandled failures log method, path, and the same
+trace id the client receives in the 500 problem body — the problem-details
+writer computes it as `Activity.Current.Id` when an activity exists, falling
+back to the request's trace identifier, so the handler logs that expression.
+
+Passwords, hashes, tokens, and request bodies are never logged. The 500 body
+stays opaque apart from its `traceId`; exception details exist only in the
+server log.
+
 ## Verification
 
 ```sh

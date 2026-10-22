@@ -89,7 +89,16 @@ namespace WITS.Migrator.Migrations
             }
             catch
             {
-                transaction.Rollback();
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (Exception rollbackException)
+                {
+                    Console.Error.WriteLine($"Rollback after failed migration apply also failed: {rollbackException.Message}");
+                }
+
+                // Rethrow the original failure, not a rollback failure.
                 throw;
             }
         }
@@ -118,7 +127,16 @@ namespace WITS.Migrator.Migrations
             }
             catch
             {
-                transaction.Rollback();
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch (Exception rollbackException)
+                {
+                    Console.Error.WriteLine($"Rollback after failed migration rollback also failed: {rollbackException.Message}");
+                }
+
+                // Rethrow the original failure, not a rollback failure.
                 throw;
             }
         }
