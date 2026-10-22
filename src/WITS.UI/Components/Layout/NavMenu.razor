@@ -1,8 +1,51 @@
 ﻿<div class="brand-row">
-    <a class="brand" href="">WITS</a>
+    <a class="brand" href="">
+        <span class="brand-name">WITS</span>
+        <span class="brand-sub">Work items</span>
+    </a>
 </div>
 
-<nav class="nav-list">
-    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">Dashboard</NavLink>
-    <NavLink class="nav-link" href="tickets">Tickets</NavLink>
-</nav>
+<div class="nav-section">
+    <p class="nav-label">Main menu</p>
+    <nav class="nav-list" aria-label="Main menu">
+        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="1.5" y="1.5" width="5" height="5" rx="1.2" />
+                <rect x="9.5" y="1.5" width="5" height="5" rx="1.2" />
+                <rect x="1.5" y="9.5" width="5" height="5" rx="1.2" />
+                <rect x="9.5" y="9.5" width="5" height="5" rx="1.2" />
+            </svg>
+            Dashboard
+        </NavLink>
+        <NavLink class="nav-link" href="tickets">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+                <path d="M4.5 6h4M4.5 9h7" />
+            </svg>
+            Tickets
+        </NavLink>
+    </nav>
+</div>
+
+<div class="nav-section">
+    <p class="nav-label">Tools</p>
+    <nav class="nav-list" aria-label="Tools">
+        <a class="nav-link" href="@ApiDocsUrl" target="_blank" rel="noreferrer">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M6.5 4.5 3 8l3.5 3.5M9.5 4.5 13 8l-3.5 3.5" />
+            </svg>
+            API reference
+        </a>
+    </nav>
+</div>
+
+<div class="nav-footer">
+    <span class="nav-version">WITS · v1</span>
+</div>
+
+@code {
+    [Inject] private IConfiguration Config { get; set; } = default!;
+
+    private string ApiDocsUrl =>
+        $"{(Config["ApiBaseUrl"] ?? "http://localhost:5351").TrimEnd('/')}/scalar/";
+}

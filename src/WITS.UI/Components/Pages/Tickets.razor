@@ -5,12 +5,25 @@
 
 <PageTitle>Tickets</PageTitle>
 
-<div class="page-heading page-heading-row">
-    <div>
-        <h1>Tickets</h1>
-        <p class="muted">All tickets reported to WITS.</p>
+<div class="page-heading">
+    <h1>Tickets</h1>
+    <p class="muted">Track every work item across the queue.</p>
+</div>
+
+<div class="view-toolbar">
+    <div class="tabs" role="tablist" aria-label="Ticket view">
+        <button type="button" role="tab" class="tab @(view == "board" ? "active" : "")"
+                aria-selected="@(view == "board")" @onclick="ShowBoard">Board</button>
+        <button type="button" role="tab" class="tab @(view == "list" ? "active" : "")"
+                aria-selected="@(view == "list")" @onclick="ShowList">List</button>
     </div>
-    <button class="btn btn-ghost" @onclick="LoadAsync" disabled="@loading">Refresh</button>
+
+    <div class="toolbar-actions">
+        <span class="muted small">
+            @totalRecords ticket(s)@(tickets.Count < totalRecords ? $" · showing first {tickets.Count}" : "")
+        </span>
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="LoadAsync" disabled="@loading">Refresh</button>
+    </div>
 </div>
 
 @if (loading)
@@ -26,7 +39,47 @@ else if (error is not null)
         <div>@error</div>
     </div>
 }
-else if (result is null || result.Items.Count == 0)
+else if (view == "board")
+{
+    <section class="board" aria-label="Tickets board">
+        @foreach (BoardColumn column in columns)
+        {
+            <section class="board-column" aria-label="@column.Name">
+                <header class="column-head">
+                    <span class="status-dot @TicketLabels.StatusTone(column.StatusId)" aria-hidden="true"></span>
+                    <h2>@column.Name</h2>
+                    <span class="count">@column.Tickets.Count</span>
+                </header>
+
+                @if (column.Tickets.Count == 0)
+                {
+                    <div class="column-empty">No tickets here yet.</div>
+                }
+                else
+                {
+                    <div class="column-cards">
+                        @foreach (Ticket ticket in column.Tickets)
+                        {
+                            <a class="ticket-card" href="tickets/@ticket.Id">
+                                <span class="ticket-title">@ticket.Summary</span>
+                                <span class="ticket-meta">Created @ticket.DateCreated.ToString("MMM d") · @ticket.ProjectCode</span>
+                                <span class="ticket-foot">
+                                    <span class="pill">
+                                        <span class="priority-dot @TicketLabels.PriorityTone(ticket.PriorityId)" aria-hidden="true"></span>
+                                        @TicketLabels.PriorityName(ticket.PriorityId)
+                                    </span>
+                                    <span class="pill">@(ticket.Assignee is null ? "Unassigned" : $"Assignee {ticket.Assignee}")</span>
+                                    <span class="pill">@ticket.TicketRef</span>
+                                </span>
+                            </a>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </section>
+}
+else if (tickets.Count == 0)
 {
     <div class="card empty-state">No tickets found.</div>
 }
@@ -46,13 +99,18 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (Ticket ticket in result.Items)
+                    @foreach (Ticket ticket in PagedTickets)
                     {
                         <tr>
-                            <td><a href="tickets/@ticket.Id">@ticket.TicketRef</a></td>
+                            <td><a class="table-link" href="tickets/@ticket.Id">@ticket.TicketRef</a></td>
                             <td>@ticket.Summary</td>
-                            <td><span class="badge">@ticket.StatusId</span></td>
-                            <td><span class="badge">@ticket.PriorityId</span></td>
+                            <td><span class="badge @TicketLabels.StatusTone(ticket.StatusId)">@TicketLabels.StatusName(ticket.StatusId)</span></td>
+                            <td>
+                                <span class="pill">
+                                    <span class="priority-dot @TicketLabels.PriorityTone(ticket.PriorityId)" aria-hidden="true"></span>
+                                    @TicketLabels.PriorityName(ticket.PriorityId)
+                                </span>
+                            </td>
                             <td>@ticket.DateCreated.ToString("yyyy-MM-dd")</td>
                             <td>@(ticket.Assignee?.ToString() ?? "Unassigned")</td>
                         </tr>
@@ -61,23 +119,34 @@ else
             </table>
         </div>
         <div class="table-footer">
-            <span class="muted">
-                @result.TotalRecords record(s) &middot; page @result.PageNumber of @Math.Max(result.TotalPages, 1)
+            <span class="muted small">
+                Showing @((page - 1) * PageSize + 1)–@Math.Min(page * PageSize, tickets.Count) of @tickets.Count
+                · page @(page) of @TotalPages
             </span>
             <div class="pager">
-                <button class="btn btn-ghost btn-sm" disabled="@(loading || page <= 1)" @onclick="PreviousAsync">Previous</button>
-                <button class="btn btn-ghost btn-sm" disabled="@(loading || page >= result.TotalPages)" @onclick="NextAsync">Next</button>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@(page <= 1)" @onclick="PreviousPage">Previous</button>
+                <button type="button" class="btn btn-ghost btn-sm" disabled="@(page >= TotalPages)" @onclick="NextPage">Next</button>
             </div>
         </div>
     </div>
 }
 
 @code {
+    private const int LoadLimit = 100;
     private const int PageSize = 10;
+
+    private string view = "board";
     private int page = 1;
-    private PagedResult<Ticket>? result;
+    private int totalRecords;
+    private List<Ticket> tickets = [];
+    private List<BoardColumn> columns = [];
     private string? error;
     private bool loading;
+
+    private IEnumerable<Ticket> PagedTickets =>
+        tickets.Skip((page - 1) * PageSize).Take(PageSize);
+
+    private int TotalPages => Math.Max((int)Math.Ceiling(tickets.Count / (double)PageSize), 1);
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,13 +159,30 @@ else
         await LoadAsync();
     }
 
+    private void ShowBoard() => view = "board";
+
+    private void ShowList()
+    {
+        view = "list";
+        page = 1;
+    }
+
+    private void PreviousPage() => page--;
+
+    private void NextPage() => page++;
+
     private async Task LoadAsync()
     {
         loading = true;
         error = null;
         try
         {
-            result = await Api.GetTicketsAsync(page, PageSize);
+            // shortcut: the board needs every column in one read; add per-view server paging past 100 tickets.
+            PagedResult<Ticket> result = await Api.GetTicketsAsync(1, LoadLimit);
+            tickets = [.. result.Items];
+            totalRecords = result.TotalRecords;
+            page = Math.Min(page, TotalPages);
+            BuildBoard();
         }
         catch (WitsApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
@@ -106,12 +192,18 @@ else
         catch (WitsApiException exception)
         {
             error = exception.Message;
-            result = null;
+            tickets = [];
+            columns = [];
+            totalRecords = 0;
+            page = 1;
         }
         catch (HttpRequestException)
         {
             error = "The WITS API is not reachable. Check that it is running and that ApiBaseUrl is correct.";
-            result = null;
+            tickets = [];
+            columns = [];
+            totalRecords = 0;
+            page = 1;
         }
         finally
         {
@@ -119,15 +211,22 @@ else
         }
     }
 
-    private Task PreviousAsync()
+    private void BuildBoard()
     {
-        page--;
-        return LoadAsync();
+        columns = TicketLabels.Statuses
+            .Select(status => new BoardColumn(
+                status.Id,
+                status.Name,
+                tickets.Where(ticket => ticket.StatusId == status.Id).ToList()))
+            .ToList();
+
+        foreach (IGrouping<int, Ticket> unknown in tickets
+            .Where(ticket => !TicketLabels.IsKnownStatus(ticket.StatusId))
+            .GroupBy(ticket => ticket.StatusId))
+        {
+            columns.Add(new BoardColumn(unknown.Key, $"Status {unknown.Key}", [.. unknown]));
+        }
     }
 
-    private Task NextAsync()
-    {
-        page++;
-        return LoadAsync();
-    }
+    private sealed record BoardColumn(int StatusId, string Name, List<Ticket> Tickets);
 }

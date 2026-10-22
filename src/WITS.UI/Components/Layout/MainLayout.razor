@@ -1,26 +1,37 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="app-shell">
-    <aside class="sidebar">
-        <NavMenu />
-    </aside>
+<div class="app-frame">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <NavMenu />
+        </aside>
 
-    <div class="main-column">
-        <header class="topbar">
-            @if (Session.IsAuthenticated)
-            {
-                <span class="session">Signed in as <strong>@Session.Username</strong></span>
-                <button class="btn btn-ghost btn-sm" @onclick="SignOut">Sign out</button>
-            }
-            else
-            {
-                <a class="topbar-link" href="login">Sign in</a>
-            }
-        </header>
+        <div class="main-column">
+            <header class="topbar">
+                <div class="crumbs" aria-label="Breadcrumb">
+                    <span class="crumb-root">Workspace</span>
+                    <span class="crumb-sep" aria-hidden="true">/</span>
+                    <span class="crumb-current">@CurrentPage</span>
+                </div>
 
-        <main class="content">
-            @Body
-        </main>
+                <div class="topbar-actions">
+                    @if (Session.IsAuthenticated)
+                    {
+                        <span class="avatar" aria-hidden="true">@Initial</span>
+                        <span class="session">@Session.Username</span>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="SignOut">Sign out</button>
+                    }
+                    else
+                    {
+                        <a class="btn btn-ghost btn-sm" href="login">Sign in</a>
+                    }
+                </div>
+            </header>
+
+            <main class="content">
+                @Body
+            </main>
+        </div>
     </div>
 </div>
 
@@ -33,6 +44,21 @@
 @code {
     [Inject] private AuthSession Session { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private string CurrentPage
+    {
+        get
+        {
+            string path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Split('#')[0].Trim('/');
+            if (path.Length == 0) return "Dashboard";
+            if (path.StartsWith("tickets", StringComparison.OrdinalIgnoreCase)) return "Tickets";
+            if (path.StartsWith("login", StringComparison.OrdinalIgnoreCase)) return "Sign in";
+            return "WITS";
+        }
+    }
+
+    private string Initial =>
+        string.IsNullOrWhiteSpace(Session.Username) ? "?" : Session.Username[..1].ToUpperInvariant();
 
     private void SignOut()
     {

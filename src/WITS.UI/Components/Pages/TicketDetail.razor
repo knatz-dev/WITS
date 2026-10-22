@@ -7,7 +7,18 @@
 
 <div class="page-heading">
     <a class="back-link" href="tickets">&larr; Back to tickets</a>
-    <h1>@(ticket is null ? "Ticket" : ticket.TicketRef)</h1>
+    @if (ticket is null)
+    {
+        <h1>Ticket</h1>
+    }
+    else
+    {
+        <div class="heading-row">
+            <h1>@ticket.TicketRef</h1>
+            <span class="badge @TicketLabels.StatusTone(ticket.StatusId)">@TicketLabels.StatusName(ticket.StatusId)</span>
+        </div>
+        <p class="muted">@ticket.ProjectCode &middot; @ticket.Reference</p>
+    }
 </div>
 
 @if (loading)
@@ -29,60 +40,86 @@ else if (ticket is null)
 }
 else
 {
-    <div class="card">
-        <h2>@ticket.Summary</h2>
-        <p class="muted">@ticket.ProjectCode &middot; @ticket.Reference</p>
+    <div class="detail-layout">
+        <article class="card detail-main">
+            <h2>@ticket.Summary</h2>
+            <p class="muted">Created @ticket.DateCreated.ToString("MMM d, yyyy HH:mm") by @ticket.LoggedByUsername</p>
 
-        <dl class="detail-list">
-            <div class="detail-row">
-                <dt>Status</dt>
-                <dd><span class="badge">@ticket.StatusId</span></dd>
+            <div class="detail-pills">
+                <span class="pill">
+                    <span class="priority-dot @TicketLabels.PriorityTone(ticket.PriorityId)" aria-hidden="true"></span>
+                    @TicketLabels.PriorityName(ticket.PriorityId)
+                </span>
+                <span class="pill">@TicketLabels.TypeName(ticket.TypeId)</span>
+                <span class="pill">@(ticket.Assignee is null ? "Unassigned" : $"Assignee {ticket.Assignee}")</span>
             </div>
-            <div class="detail-row">
-                <dt>Priority</dt>
-                <dd><span class="badge">@ticket.PriorityId</span></dd>
-            </div>
-            <div class="detail-row">
-                <dt>Type</dt>
-                <dd>@ticket.TypeId</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Created</dt>
-                <dd>@ticket.DateCreated.ToString("yyyy-MM-dd HH:mm")</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Resolved</dt>
-                <dd>@(ticket.DateResolved == default ? "Not resolved" : ticket.DateResolved.ToString("yyyy-MM-dd HH:mm"))</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Logged by</dt>
-                <dd>@ticket.LoggedByUsername</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Reported by</dt>
-                <dd>@ticket.ReportedByUsername</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Assignee</dt>
-                <dd>@(ticket.Assignee?.ToString() ?? "Unassigned")</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Contact email</dt>
-                <dd>@(string.IsNullOrWhiteSpace(ticket.ContactEmail) ? "—" : ticket.ContactEmail)</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Description</dt>
-                <dd>@(string.IsNullOrWhiteSpace(ticket.Description) ? "—" : ticket.Description)</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Details</dt>
-                <dd>@(string.IsNullOrWhiteSpace(ticket.Details) ? "—" : ticket.Details)</dd>
-            </div>
-            <div class="detail-row">
-                <dt>Next action</dt>
-                <dd>@ticket.NextAction</dd>
-            </div>
-        </dl>
+
+            <section class="detail-section">
+                <h3>Description</h3>
+                <p class="description">@(string.IsNullOrWhiteSpace(ticket.Description) ? "No description provided." : ticket.Description)</p>
+            </section>
+
+            <section class="detail-section">
+                <h3>Details</h3>
+                <p class="description">@(string.IsNullOrWhiteSpace(ticket.Details) ? "No further details." : ticket.Details)</p>
+            </section>
+
+            <section class="detail-section">
+                <h3>Next action</h3>
+                <p>@ticket.NextAction</p>
+            </section>
+        </article>
+
+        <aside class="card detail-side">
+            <h3>Workflow</h3>
+            <dl class="detail-list">
+                <div class="detail-row">
+                    <dt>Status</dt>
+                    <dd><span class="badge @TicketLabels.StatusTone(ticket.StatusId)">@TicketLabels.StatusName(ticket.StatusId)</span></dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Priority</dt>
+                    <dd>
+                        <span class="pill">
+                            <span class="priority-dot @TicketLabels.PriorityTone(ticket.PriorityId)" aria-hidden="true"></span>
+                            @TicketLabels.PriorityName(ticket.PriorityId)
+                        </span>
+                    </dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Type</dt>
+                    <dd>@TicketLabels.TypeName(ticket.TypeId)</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Created</dt>
+                    <dd>@ticket.DateCreated.ToString("yyyy-MM-dd")</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Resolved</dt>
+                    <dd>@(ticket.DateResolved == default ? "Not resolved" : ticket.DateResolved.ToString("yyyy-MM-dd"))</dd>
+                </div>
+            </dl>
+
+            <h3>People</h3>
+            <dl class="detail-list">
+                <div class="detail-row">
+                    <dt>Logged by</dt>
+                    <dd>@ticket.LoggedByUsername</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Reported by</dt>
+                    <dd>@ticket.ReportedByUsername</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Assignee</dt>
+                    <dd>@(ticket.Assignee?.ToString() ?? "Unassigned")</dd>
+                </div>
+                <div class="detail-row">
+                    <dt>Contact email</dt>
+                    <dd>@(string.IsNullOrWhiteSpace(ticket.ContactEmail) ? "—" : ticket.ContactEmail)</dd>
+                </div>
+            </dl>
+        </aside>
     </div>
 }
 

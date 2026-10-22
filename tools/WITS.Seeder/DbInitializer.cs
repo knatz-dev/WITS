@@ -18,7 +18,7 @@ internal static class DbInitializer
     public static void Initialize(SQliteConnectionFactory sqliteConnFactory)
     {
         ArgumentNullException.ThrowIfNull(sqliteConnFactory);
-    
+
         using var uow = new UnitOfWork(sqliteConnFactory);
         uow.BeginTransaction();
         try
@@ -79,6 +79,9 @@ internal static class DbInitializer
     {
         IGenericRepository<User, long> userRepository = uow.GetRepository<User, long>();
 
+        var (adminHash, adminSalt) = AuthHelper.HashPassword("Admin@2025!");
+        var (demoHash, demoSalt) = AuthHelper.HashPassword("demo-password!");
+
         var usersToSeed = new List<User>
         {
             new User
@@ -88,7 +91,8 @@ internal static class DbInitializer
                 FirstName = "Admin",
                 LastName = "Strator",
                 EmailAddress = "admin@example.com",
-                PasswordHash = "adminhashedpassword", 
+                PasswordHash = adminHash,
+                PasswordSalt = adminSalt,
                 Created = DateTime.UtcNow,
                 OrganisationId = 1,
                 PhoneNumber = "123-456-7890",
@@ -100,7 +104,8 @@ internal static class DbInitializer
                 FirstName = "Demo",
                 LastName = "User",
                 EmailAddress = "demo@example.com",
-                PasswordHash = "demhashedpassword", 
+                PasswordHash = demoHash,
+                PasswordSalt = demoSalt,
                 Created = DateTime.UtcNow,
                 OrganisationId = 2,
                 PhoneNumber = "123-456-7890",

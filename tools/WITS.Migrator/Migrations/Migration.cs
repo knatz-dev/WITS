@@ -66,7 +66,7 @@ namespace WITS.Migrator.Migrations
                 checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
                 int exists = (int?)checkCmd.ExecuteScalar() ?? 0;
 
-                if (exists > 0)
+                if (exists == 0)
                 {
                     // Apply migration
                     using var cmd = new SqliteCommand(UpScript, connection, transaction);
