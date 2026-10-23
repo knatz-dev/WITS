@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------------
 //  Created by: Nathan Zwelibanzi Khupe
-//  � 2025 Nathan Zwelibanzi Khupe. All rights reserved.
+//  © 2025 Nathan Zwelibanzi Khupe. All rights reserved.
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
@@ -12,9 +12,9 @@ namespace WITS.Migrator.Migrations
     {
         public override string MigrationId => "20250419113613";
         public override string Name => "AuthSchema";
-        
+
         public override string UpScript => @"
-            -- Create the entity table used by the data repository
+            -- Canonical user table, matching WITS.Data.Entity.User.
             CREATE TABLE IF NOT EXISTS User (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 OrganisationId INTEGER NOT NULL,
@@ -33,27 +33,15 @@ namespace WITS.Migrator.Migrations
                 FOREIGN KEY (OrganisationId) REFERENCES Organisation(Id)
             );
 
-            -- Create Users table
-            CREATE TABLE IF NOT EXISTS Users (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Username TEXT NOT NULL UNIQUE,
-                Email TEXT NOT NULL UNIQUE,
-                PasswordHash TEXT NOT NULL,
-                FirstName TEXT,
-                LastName TEXT,
-                IsActive BOOLEAN NOT NULL DEFAULT 1,
-                IsAdmin BOOLEAN NOT NULL DEFAULT 0,
-                LastLoginAt DATETIME,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            -- Create Roles table
+            -- Create Roles table (matches WITS.Data.Entity.Role)
             CREATE TABLE IF NOT EXISTS Roles (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL UNIQUE,
                 Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                Code TEXT NOT NULL,
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME
             );
 
             -- Create UserRoles table
@@ -62,16 +50,18 @@ namespace WITS.Migrator.Migrations
                 RoleId INTEGER NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (UserId, RoleId),
-                FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+                FOREIGN KEY (UserId) REFERENCES User(Id) ON DELETE CASCADE,
                 FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE
             );
 
-            -- Create Permissions table
+            -- Create Permissions table (matches WITS.Data.Entity.Permission)
             CREATE TABLE IF NOT EXISTS Permissions (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Name TEXT NOT NULL UNIQUE,
+                Action TEXT NOT NULL UNIQUE,
                 Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME
             );
 
             -- Create RolePermissions table
@@ -91,17 +81,17 @@ namespace WITS.Migrator.Migrations
                 Token TEXT NOT NULL UNIQUE,
                 ExpiresAt DATETIME NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+                FOREIGN KEY (UserId) REFERENCES User(Id) ON DELETE CASCADE
             );
 
             -- Insert default roles
-            INSERT INTO Roles (Name, Description) VALUES 
-                ('Admin', 'System administrator with full access'),
-                ('Manager', 'Project manager with elevated permissions'),
-                ('User', 'Regular user with basic permissions');
+            INSERT INTO Roles (Name, Description, Code) VALUES
+                ('Admin', 'System administrator with full access', 'ADMIN'),
+                ('Manager', 'Project manager with elevated permissions', 'MANAGER'),
+                ('User', 'Regular user with basic permissions', 'USER');
 
             -- Insert default permissions
-            INSERT INTO Permissions (Name, Description) VALUES 
+            INSERT INTO Permissions (Action, Description) VALUES
                 ('users.read', 'View user information'),
                 ('users.write', 'Modify user information'),
                 ('projects.read', 'View project information'),

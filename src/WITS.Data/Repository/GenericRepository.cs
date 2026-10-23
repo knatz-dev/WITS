@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
+using System.Reflection;
 using System.Text.Json;
 using Dapper;
 using WITS.Common;
@@ -29,19 +30,39 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         // The unit of work borrows its shared connection; standalone factories hand out
         // per-call connections that this instance must release after each operation.
         _ownsConnection = ownsConnection;
-        _tableName = TypeName;
+        // Explicit [Table] mapping wins; otherwise the class name is the table name.
+        _tableName = typeof(T).GetCustomAttribute<TableAttribute>(inherit: true)?.Name ?? TypeName;
 
         var props = typeof(T).GetProperties();
         _columnNames = props
-            .Where(p => !string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase)
-                && p.CanWrite
-                && !Attribute.IsDefined(p, typeof(NotMappedAttribute), inherit: true))
+            .Where(p => !string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase) && IsStoredColumn(p))
             .Select(p => p.Name)
             .ToList();
 
         _primaryKeyColumn = props.FirstOrDefault(p => p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))?.Name
                             ?? props.FirstOrDefault(p => p.Name.Equals($"{TypeName}Id", StringComparison.OrdinalIgnoreCase))?.Name
                             ?? "Id";
+    }
+
+    // Persisted columns are writable properties with a SQLite-storable scalar type; this keeps
+    // navigation, collection and computed properties out of generated INSERT/UPDATE statements.
+    private static bool IsStoredColumn(PropertyInfo property)
+    {
+        if (!property.CanWrite || Attribute.IsDefined(property, typeof(NotMappedAttribute), inherit: true))
+        {
+            return false;
+        }
+
+        var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        return type.IsPrimitive
+               || type.IsEnum
+               || type == typeof(string)
+               || type == typeof(decimal)
+               || type == typeof(DateTime)
+               || type == typeof(DateTimeOffset)
+               || type == typeof(TimeSpan)
+               || type == typeof(Guid)
+               || type == typeof(byte[]);
     }
 
     // Live view of the owning transaction: repositories cached before BeginTransaction must still enlist.

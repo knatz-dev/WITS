@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------------
 //  Created by: Nathan Zwelibanzi Khupe
-//  � 2025 Nathan Zwelibanzi Khupe. All rights reserved.
+//  © 2025 Nathan Zwelibanzi Khupe. All rights reserved.
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
@@ -22,7 +22,8 @@ namespace WITS.Migrator.Migrations
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 CreatedByUserId INTEGER NOT NULL,
-                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id)
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                FOREIGN KEY (CreatedByUserId) REFERENCES User(Id)
             );
 
             -- Create ProjectMembers table
@@ -33,7 +34,7 @@ namespace WITS.Migrator.Migrations
                 Role TEXT NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
-                FOREIGN KEY (UserId) REFERENCES Users(Id),
+                FOREIGN KEY (UserId) REFERENCES User(Id),
                 UNIQUE(ProjectId, UserId)
             );
 
@@ -50,7 +51,7 @@ namespace WITS.Migrator.Migrations
                 UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 DueDate DATETIME,
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
-                FOREIGN KEY (AssignedToUserId) REFERENCES Users(Id)
+                FOREIGN KEY (AssignedToUserId) REFERENCES User(Id)
             );
 
             -- Create ProjectComments table
@@ -63,7 +64,7 @@ namespace WITS.Migrator.Migrations
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
                 FOREIGN KEY (TaskId) REFERENCES ProjectTasks(Id),
-                FOREIGN KEY (UserId) REFERENCES Users(Id)
+                FOREIGN KEY (UserId) REFERENCES User(Id)
             );";
 
         public override string DownScript => @"

@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------------
 //  Created by: Nathan Zwelibanzi Khupe
-//  � 2025 Nathan Zwelibanzi Khupe. All rights reserved.
+//  © 2025 Nathan Zwelibanzi Khupe. All rights reserved.
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
@@ -14,30 +14,15 @@ namespace WITS.Migrator.Migrations
         public override string Name => "OrganizationAndActivitySchema";
         
         public override string UpScript => @"
-            -- Create Organizations table
-            CREATE TABLE IF NOT EXISTS Organizations (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Name TEXT NOT NULL UNIQUE,
-                Description TEXT,
-                Website TEXT,
-                Email TEXT,
-                Phone TEXT,
-                Address TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CreatedByUserId INTEGER NOT NULL,
-                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id)
-            );
-
-            -- Create OrganizationMembers table
+            -- Create OrganizationMembers table (canonical tables are Organisation and User)
             CREATE TABLE IF NOT EXISTS OrganizationMembers (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 OrganizationId INTEGER NOT NULL,
                 UserId INTEGER NOT NULL,
                 Role TEXT NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (OrganizationId) REFERENCES Organizations(Id),
-                FOREIGN KEY (UserId) REFERENCES Users(Id),
+                FOREIGN KEY (OrganizationId) REFERENCES Organisation(Id),
+                FOREIGN KEY (UserId) REFERENCES User(Id),
                 UNIQUE(OrganizationId, UserId)
             );
 
@@ -54,8 +39,8 @@ namespace WITS.Migrator.Migrations
                 TicketId INTEGER,
                 Data TEXT,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (UserId) REFERENCES Users(Id),
-                FOREIGN KEY (OrganizationId) REFERENCES Organizations(Id),
+                FOREIGN KEY (UserId) REFERENCES User(Id),
+                FOREIGN KEY (OrganizationId) REFERENCES Organisation(Id),
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
                 FOREIGN KEY (TicketId) REFERENCES Tickets(Id)
             );
@@ -68,7 +53,7 @@ namespace WITS.Migrator.Migrations
                 Content TEXT NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ActivityId) REFERENCES Activities(Id),
-                FOREIGN KEY (UserId) REFERENCES Users(Id)
+                FOREIGN KEY (UserId) REFERENCES User(Id)
             );
 
             -- Create Notifications table
@@ -83,31 +68,21 @@ namespace WITS.Migrator.Migrations
                 ProjectId INTEGER,
                 TicketId INTEGER,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (UserId) REFERENCES Users(Id),
+                FOREIGN KEY (UserId) REFERENCES User(Id),
                 FOREIGN KEY (ActivityId) REFERENCES Activities(Id),
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
                 FOREIGN KEY (TicketId) REFERENCES Tickets(Id)
             );
 
-            -- Add OrganizationId to existing tables
-            ALTER TABLE Projects ADD COLUMN OrganizationId INTEGER NOT NULL DEFAULT 1 REFERENCES Organizations(Id);
-            ALTER TABLE Users ADD COLUMN DefaultOrganizationId INTEGER REFERENCES Organizations(Id);
+            -- Add canonical organisation references to existing tables
+            ALTER TABLE Projects ADD COLUMN OrganizationId INTEGER NOT NULL DEFAULT 1 REFERENCES Organisation(Id);
+            ALTER TABLE User ADD COLUMN DefaultOrganizationId INTEGER REFERENCES Organisation(Id);
 
-            -- Create default organization
-            INSERT INTO Organizations (Id, Name, Description, CreatedByUserId) VALUES 
-                (1, 'Default Organization', 'Default organization created by system', 1);";
+            -- Create default organisation
+            INSERT OR IGNORE INTO Organisation (Id, Name, Description, Code, Created) VALUES
+                (1, 'Default Organization', 'Default organization created by system', 'DEFAULT', CURRENT_TIMESTAMP);";
 
         public override string DownScript => @"
-            -- Remove organization references from existing tables
-            CREATE TABLE Projects_Temp AS SELECT Id, Name, Description, CreatedAt, UpdatedAt, CreatedByUserId FROM Projects;
-            DROP TABLE Projects;
-            ALTER TABLE Projects_Temp RENAME TO Projects;
-
-            CREATE TABLE Users_Temp AS SELECT Id, Username, Email, PasswordHash, FirstName, LastName, IsActive, IsAdmin, LastLoginAt, CreatedAt, UpdatedAt FROM Users;
-            DROP TABLE Users;
-            ALTER TABLE Users_Temp RENAME TO Users;
-
-            -- Drop new tables
             DROP TABLE IF EXISTS Notifications;
             DROP TABLE IF EXISTS ActivityComments;
             DROP TABLE IF EXISTS Activities;

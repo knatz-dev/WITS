@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------------
 //  Created by: Nathan Zwelibanzi Khupe
-//  � 2025 Nathan Zwelibanzi Khupe. All rights reserved.
+//  © 2025 Nathan Zwelibanzi Khupe. All rights reserved.
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
@@ -14,28 +14,31 @@ namespace WITS.Migrator.Migrations
         public override string Name => "TicketSchema";
         
         public override string UpScript => @"
-            -- Create TicketTypes table
+            -- Create TicketTypes table (matches WITS.Data.Entity.TicketType)
             CREATE TABLE IF NOT EXISTS TicketTypes (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL UNIQUE,
-                Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME
             );
 
-            -- Create TicketPriorities table
+            -- Create TicketPriorities table (matches WITS.Data.Entity.TicketPriority)
             CREATE TABLE IF NOT EXISTS TicketPriorities (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL UNIQUE,
-                Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME
             );
 
-            -- Create TicketStatuses table
+            -- Create TicketStatuses table (matches WITS.Data.Entity.TicketStatus)
             CREATE TABLE IF NOT EXISTS TicketStatuses (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL UNIQUE,
-                Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME
             );
 
             -- Create Tickets table
@@ -52,12 +55,13 @@ namespace WITS.Migrator.Migrations
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 DueDate DATETIME,
+                IsDeleted BOOLEAN NOT NULL DEFAULT 0,
                 FOREIGN KEY (TypeId) REFERENCES TicketTypes(Id),
                 FOREIGN KEY (PriorityId) REFERENCES TicketPriorities(Id),
                 FOREIGN KEY (StatusId) REFERENCES TicketStatuses(Id),
                 FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
-                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id),
-                FOREIGN KEY (AssignedToUserId) REFERENCES Users(Id)
+                FOREIGN KEY (CreatedByUserId) REFERENCES User(Id),
+                FOREIGN KEY (AssignedToUserId) REFERENCES User(Id)
             );
 
             -- Create TicketComments table
@@ -68,7 +72,7 @@ namespace WITS.Migrator.Migrations
                 Content TEXT NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (TicketId) REFERENCES Tickets(Id),
-                FOREIGN KEY (UserId) REFERENCES Users(Id)
+                FOREIGN KEY (UserId) REFERENCES User(Id)
             );
 
             -- Create TicketAttachments table
@@ -82,7 +86,7 @@ namespace WITS.Migrator.Migrations
                 UploadedByUserId INTEGER NOT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (TicketId) REFERENCES Tickets(Id),
-                FOREIGN KEY (UploadedByUserId) REFERENCES Users(Id)
+                FOREIGN KEY (UploadedByUserId) REFERENCES User(Id)
             );
 
             -- Create TicketHistory table
@@ -95,30 +99,30 @@ namespace WITS.Migrator.Migrations
                 NewValue TEXT,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (TicketId) REFERENCES Tickets(Id),
-                FOREIGN KEY (ChangedByUserId) REFERENCES Users(Id)
+                FOREIGN KEY (ChangedByUserId) REFERENCES User(Id)
             );
 
             -- Insert default ticket types
-            INSERT INTO TicketTypes (Name, Description) VALUES 
-                ('Bug', 'A problem that needs to be fixed'),
-                ('Feature', 'A new feature to be implemented'),
-                ('Task', 'A general task to be completed'),
-                ('Improvement', 'An enhancement to existing functionality');
+            INSERT INTO TicketTypes (Name) VALUES
+                ('Bug'),
+                ('Feature'),
+                ('Task'),
+                ('Improvement');
 
             -- Insert default priorities
-            INSERT INTO TicketPriorities (Name, Description) VALUES 
-                ('Low', 'Low priority issue'),
-                ('Medium', 'Medium priority issue'),
-                ('High', 'High priority issue'),
-                ('Critical', 'Critical issue requiring immediate attention');
+            INSERT INTO TicketPriorities (Name) VALUES
+                ('Low'),
+                ('Medium'),
+                ('High'),
+                ('Critical');
 
             -- Insert default statuses
-            INSERT INTO TicketStatuses (Name, Description) VALUES 
-                ('Open', 'Ticket is open and needs to be addressed'),
-                ('In Progress', 'Ticket is being worked on'),
-                ('Review', 'Ticket is under review'),
-                ('Resolved', 'Ticket has been resolved'),
-                ('Closed', 'Ticket has been closed');";
+            INSERT INTO TicketStatuses (Name) VALUES
+                ('Open'),
+                ('In Progress'),
+                ('Review'),
+                ('Resolved'),
+                ('Closed');";
 
         public override string DownScript => @"
             DROP TABLE IF EXISTS TicketHistory;
