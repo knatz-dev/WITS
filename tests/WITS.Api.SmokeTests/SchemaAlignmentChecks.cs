@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Data.Sqlite;
 using WITS.Common;
 using WITS.Data;
@@ -67,6 +68,7 @@ internal static class SchemaAlignmentChecks
             Require(role is { Code: "SMOKE" }, "Role must map through [Table] to the Roles table.");
             role!.Name = "Smoke role renamed";
             Require(await roles.UpdateAsync(role), "Role update must affect the migrated table.");
+            Require(role.LastModified is not null, "An update must stamp LastModified.");
 
             var roleQuery = await roles.QueryAsync(new GenericFilter
             {
@@ -84,9 +86,11 @@ internal static class SchemaAlignmentChecks
                 "Permission must map to Permissions.Action.");
 
             var ticketTypes = unitOfWork.GetRepository<TicketType, int>();
-            var ticketTypeId = await ticketTypes.InsertAsync(new TicketType { Id = 0, Name = "Smoke type", Created = now });
-            Require((await ticketTypes.GetByIdAsync(ticketTypeId))?.Name == "Smoke type",
-                "TicketType must map to TicketTypes.");
+            // Created left unset: the repository must stamp it, since no default reaches an explicit INSERT.
+            var ticketTypeId = await ticketTypes.InsertAsync(new TicketType { Id = 0, Name = "Smoke type" });
+            var ticketType = await ticketTypes.GetByIdAsync(ticketTypeId);
+            Require(ticketType is { Name: "Smoke type" } && ticketType.Created != default,
+                "TicketType must map to TicketTypes and stamp an unset Created.");
 
             var ticketPriorities = unitOfWork.GetRepository<TicketPriority, int>();
             var ticketPriorityId = await ticketPriorities.InsertAsync(new TicketPriority { Id = 0, Name = "Smoke priority", Created = now });
@@ -102,6 +106,13 @@ internal static class SchemaAlignmentChecks
             Require(await roles.GetByIdAsync(roleId) is null, "A deleted role must not be returned by id.");
 
             unitOfWork.Commit();
+
+            // The row must survive the delete: reads hide it, they do not erase it.
+            await using var verify = new SqliteConnection(connectionString);
+            await verify.OpenAsync();
+            var kept = await verify.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Roles WHERE Id = @Id AND IsDeleted = 1", new { Id = roleId });
+            var modified = await verify.ExecuteScalarAsync<string>("SELECT LastModified FROM Roles WHERE Id = @Id", new { Id = roleId });
+            Require(kept == 1 && !string.IsNullOrEmpty(modified), "Delete must soft-delete the row and stamp LastModified.");
         }
         finally
         {

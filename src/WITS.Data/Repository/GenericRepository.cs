@@ -70,7 +70,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<T?> GetByIdAsync(TDataType id)
     {
-        var query = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @Id";
+        var query = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
         return await connection.QuerySingleOrDefaultAsync<T>(query, new { Id = id }, Transaction);
@@ -78,6 +78,13 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<int> InsertAsync(T model)
     {
+        // Every writer shares one UTC default for Created, while an explicitly
+        // supplied value (tests, seeder) is kept as-is.
+        if (model.Created == default)
+        {
+            model.Created = DateTime.UtcNow;
+        }
+
         var query = $"""
                      INSERT INTO {_tableName} ({string.Join(',', _columnNames)})
                      VALUES (@{string.Join(", @", _columnNames)});
@@ -92,6 +99,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<bool> UpdateAsync(T model)
     {
+        model.LastModified = DateTime.UtcNow;
         var setClause = string.Join(", ", _columnNames.Select(prop => $"{prop} = @{prop}"));
         var query = $"UPDATE {_tableName} SET {setClause} WHERE {_primaryKeyColumn} = @Id";
 
@@ -101,12 +109,15 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         return rows > 0;
     }
 
+    // shortcut: soft delete keeps the row, so reads hide it through the IsDeleted flag instead of
+    // erasing it, and the table must carry IsDeleted and LastModified columns — tables without them
+    // already fail the read filters. Upgrade to a hard purge only when retention demands it.
     public async Task<bool> DeleteByIdAsync(TDataType id)
     {
-        var query = $"DELETE FROM {_tableName} WHERE {_primaryKeyColumn} = @Id";
+        var query = $"UPDATE {_tableName} SET IsDeleted = 1, LastModified = @LastModified WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
-        var rows = await connection.ExecuteAsync(query, new { Id = id }, Transaction);
+        var rows = await connection.ExecuteAsync(query, new { Id = id, LastModified = DateTime.UtcNow }, Transaction);
         return rows > 0;
     }
 
