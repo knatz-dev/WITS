@@ -102,6 +102,33 @@ internal static class SchemaAlignmentChecks
             Require((await ticketStatuses.GetByIdAsync(ticketStatusId))?.Name == "Smoke status",
                 "TicketStatus must map to TicketStatuses.");
 
+            var projects = unitOfWork.GetRepository<Project, long>();
+            var projectId = await projects.InsertAsync(new Project
+            {
+                Id = 0,
+                OrganizationId = organisationId,
+                Name = "Smoke project",
+                CreatedByUserId = userId,
+                Created = now
+            });
+            Require(projectId > 0 && (await projects.GetByIdAsync(projectId))?.Name == "Smoke project",
+                "Project must map to Projects and round-trip.");
+
+            var tickets = unitOfWork.GetRepository<Ticket, long>();
+            var ticketId = await tickets.InsertAsync(new Ticket
+            {
+                Id = 0,
+                Title = "Smoke ticket",
+                TypeId = ticketTypeId,
+                PriorityId = ticketPriorityId,
+                StatusId = ticketStatusId,
+                ProjectId = projectId,
+                CreatedByUserId = userId,
+                Created = now
+            });
+            Require(ticketId > 0 && (await tickets.GetByIdAsync(ticketId))?.Title == "Smoke ticket",
+                "Ticket must map to Tickets and round-trip.");
+
             Require(await roles.DeleteByIdAsync(roleId), "Role delete must affect the migrated table.");
             Require(await roles.GetByIdAsync(roleId) is null, "A deleted role must not be returned by id.");
 

@@ -19,10 +19,10 @@ namespace WITS.Migrator.Migrations
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name TEXT NOT NULL,
                 Description TEXT,
-                CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 CreatedByUserId INTEGER NOT NULL,
                 IsDeleted BOOLEAN NOT NULL DEFAULT 0,
+                Created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                LastModified DATETIME,
                 FOREIGN KEY (CreatedByUserId) REFERENCES User(Id)
             );
 

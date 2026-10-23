@@ -136,8 +136,8 @@ builder.Services.AddOpenApi("v1", options =>
                     {
                         continue;
                     }
-                    // Ticket endpoints require auth
-                    if (path.Key.Contains("/ticket"))
+                    // Ticket and project endpoints require auth
+                    if (path.Key.Contains("/ticket") || path.Key.Contains("/project"))
                     {
                         operation.Value.Security = new List<Microsoft.OpenApi.Models.OpenApiSecurityRequirement>
                         {
@@ -173,6 +173,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
 
 WebApplication app = builder.Build();
 _ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;

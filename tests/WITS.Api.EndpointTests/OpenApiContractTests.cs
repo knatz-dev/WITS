@@ -81,6 +81,7 @@ public sealed class OpenApiContractTests
             {
                 services.Replace(ServiceDescriptor.Scoped<IAuthService, StubAuthService>());
                 services.Replace(ServiceDescriptor.Scoped<ITicketService, StubTicketService>());
+                services.Replace(ServiceDescriptor.Scoped<IProjectService, StubProjectService>());
             });
         });
 }

@@ -96,7 +96,15 @@ namespace WITS.Migrator
         public static void EnsureMigrationsTable(SqliteConnection connection)
         {
             var command = connection.CreateCommand();
-            command.CommandText = "CREATE TABLE IF NOT EXISTS __Migrations (MigrationId TEXT PRIMARY KEY);";
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS __Migrations (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    MigrationId TEXT NOT NULL UNIQUE,
+                    Name TEXT NOT NULL,
+                    AppliedAt DATETIME NOT NULL,
+                    Script TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_migrationid ON __Migrations(MigrationId);";
             command.ExecuteNonQuery();
         }
 
@@ -128,7 +136,15 @@ namespace WITS.Migrator
             }
             catch (SqliteException)
             {
-                // If __Migrations table doesn't exist, no migrations have been applied
+                // If __Migrations table doesn't exist or is malformed, bootstrap it and treat as uninitialized.
+                try
+                {
+                    EnsureMigrationsTable(connection);
+                }
+                catch
+                {
+                    // best effort
+                }
             }
 
             return appliedMigrations;
@@ -286,13 +302,21 @@ namespace WITS.Migrator
                 return 0;
             }
 
+            var applied = GetAppliedMigrations();
+            var pending = migrations.Where(m => !applied.Contains(m.MigrationId)).ToList();
+            if (!pending.Any())
+            {
+                AnsiConsole.MarkupLine("[green]All migrations are up to date.[/]");
+                return 0;
+            }
+
             var table = new Table();
             table.Border(TableBorder.Rounded);
             table.AddColumn(new TableColumn("[blue]Migration ID[/]").Centered());
             table.AddColumn(new TableColumn("[blue]Name[/]").Centered());
             table.AddColumn(new TableColumn("[blue]Status[/]").Centered());
 
-            foreach (var migration in migrations)
+            foreach (var migration in pending)
             {
                 try
                 {

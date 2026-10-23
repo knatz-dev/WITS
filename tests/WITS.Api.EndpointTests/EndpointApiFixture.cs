@@ -61,6 +61,7 @@ public sealed class EndpointApiFixture : IAsyncLifetime
             {
                 services.Replace(ServiceDescriptor.Scoped<IAuthService, StubAuthService>());
                 services.Replace(ServiceDescriptor.Scoped<ITicketService, StubTicketService>());
+                services.Replace(ServiceDescriptor.Scoped<IProjectService, StubProjectService>());
             });
         });
 
@@ -131,4 +132,24 @@ internal sealed class StubTicketService : ITicketService
 
     public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) =>
         Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, filter.PageNumber, filter.PageSize));
+}
+
+internal sealed class StubProjectService : IProjectService
+{
+    private static readonly ProjectResponse Project = new(
+        1,
+        "Sample project",
+        "Description",
+        1,
+        1,
+        new DateTime(2026, 10, 23, 9, 30, 0, DateTimeKind.Utc),
+        null);
+
+    public Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize) =>
+        Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, page, pageSize));
+
+    public Task<ProjectResponse?> GetByIdAsync(long id) => Task.FromResult(id == Project.Id ? Project : null);
+
+    public Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter) =>
+        Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, filter.PageNumber, filter.PageSize));
 }

@@ -10,13 +10,15 @@ using WITS.Data.Common;
 namespace WITS.Data.Entity;
 
 [Table("Tickets")]
-public class Ticket: BaseEntity<Guid>
+public class Ticket: BaseEntity<long>
 {
+    public required string Title { get; set; }
+    public string? Description { get; set; }
+    public int TypeId { get; set; }
+    public int PriorityId { get; set; }
+    public int StatusId { get; set; }
     public long ProjectId { get; set; }
-    public long? AssignedUserId { get; set; }
-    public short TicketStatusId { get; set; }
-    public short TicketPriorityId { get; set; }
-    public short TicketRankId { get; set; }
-    public short TicketTypeId { get; set; }
-
+    public long CreatedByUserId { get; set; }
+    public long? AssignedToUserId { get; set; }
+    public DateTime? DueDate { get; set; }
 }

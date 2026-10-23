@@ -12,9 +12,8 @@ namespace WITS.Data.Entity;
 [Table("Projects")]
 public class Project: BaseEntity<long>
 {
-    public Guid OrganisationId { get; set; }
+    public int OrganizationId { get; set; }
     public required string Name { get; set; }
-
-    public Guid? WorkFlowId { get; set; }
-    
+    public string? Description { get; set; }
+    public long CreatedByUserId { get; set; }
 }

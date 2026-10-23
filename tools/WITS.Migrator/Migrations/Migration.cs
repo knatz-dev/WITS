@@ -27,27 +27,21 @@ namespace WITS.Migrator.Migrations
                 Directory.CreateDirectory(dataDirectory);
             }
 
-            if (!File.Exists(dataSource))
-            {
-                Console.WriteLine($"Database file not found at {dataSource}. Creating new database...");
-                using var connection = new SqliteConnection(connectionString);
-                connection.Open();
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
 
-                // Create migrations table if it doesn't exist
-                using var cmd = new SqliteCommand(@"
-                    CREATE TABLE IF NOT EXISTS __Migrations (
-                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        MigrationId TEXT NOT NULL UNIQUE,
-                        Name TEXT NOT NULL,
-                        AppliedAt DATETIME NOT NULL,
-                        Script TEXT NOT NULL
-                    );
+            using var cmd = new SqliteCommand(@"
+                CREATE TABLE IF NOT EXISTS __Migrations (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    MigrationId TEXT NOT NULL UNIQUE,
+                    Name TEXT NOT NULL,
+                    AppliedAt DATETIME NOT NULL,
+                    Script TEXT NOT NULL
+                );
 
-                    CREATE INDEX IF NOT EXISTS idx_migrations_id ON __Migrations(MigrationId);", connection);
-                cmd.ExecuteNonQuery();
-
-                Console.WriteLine("Database and migrations table created successfully.");
-            }
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_migrationid ON __Migrations(MigrationId);
+                CREATE INDEX IF NOT EXISTS idx_migrations_id ON __Migrations(MigrationId);", connection);
+            cmd.ExecuteNonQuery();
         }
 
         public void Apply(string connectionString)
@@ -64,7 +58,8 @@ namespace WITS.Migrator.Migrations
                 var checkSql = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = @MigrationId";
                 using var checkCmd = new SqliteCommand(checkSql, connection, transaction);
                 checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
-                long exists = (long)checkCmd.ExecuteScalar()!;
+                var scalar = checkCmd.ExecuteScalar();
+                long exists = scalar == null || scalar == DBNull.Value ? 0L : Convert.ToInt64(scalar);
 
                 if (exists == 0)
                 {
@@ -113,6 +108,18 @@ namespace WITS.Migrator.Migrations
             using var transaction = connection.BeginTransaction();
             try
             {
+                // Only rollback if this migration was applied
+                var checkSql = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = @MigrationId";
+                using var checkCmd = new SqliteCommand(checkSql, connection, transaction);
+                checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
+                var scalar = checkCmd.ExecuteScalar();
+                long exists = scalar == null || scalar == DBNull.Value ? 0L : Convert.ToInt64(scalar);
+                if (exists == 0)
+                {
+                    transaction.Commit();
+                    return;
+                }
+
                 // Apply rollback script
                 using var cmd = new SqliteCommand(DownScript, connection, transaction);
                 cmd.ExecuteNonQuery();
