@@ -85,10 +85,13 @@ static async Task WriteProblemAsync(HttpContext context, ProblemDetails problem)
 }
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddAuthenticationRateLimits();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddSingleton<RefreshTokenStore>();
+builder.Services.AddSingleton<IPermissionService, InMemoryPermissionService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
