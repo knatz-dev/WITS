@@ -20,7 +20,6 @@ using WITS.Data;
 using WITS.Data.Entity;
 using WITS.Models;
 using WITS.Services;
-using Ticket = WITS.Models.Ticket;
 
 namespace WITS.Api.SmokeTests;
 
@@ -190,7 +189,7 @@ internal static class OperationalSignalsChecks
 
     private sealed class ContendedTicketService(string connectionString) : ITicketService
     {
-        public async Task<Ticket> GetByIdAsync(long id)
+        public async Task<TicketResponse?> GetByIdAsync(long id)
         {
             if (id == 43) throw new SqliteException("Simulated SQLITE_LOCKED", 6);
             using var connection = new SqliteConnection(connectionString);
@@ -199,7 +198,7 @@ internal static class OperationalSignalsChecks
             throw new InvalidOperationException("The fixture command should have failed.");
         }
 
-        public Task<PagedResult<Ticket>> GetAllAsync(int page, int pageSize) => throw new NotSupportedException();
-        public Task<PagedResult<Ticket>> QueryAsync(GenericFilter filter) => throw new NotSupportedException();
+        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) => throw new NotSupportedException();
+        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) => throw new NotSupportedException();
     }
 }

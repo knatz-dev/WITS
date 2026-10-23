@@ -59,6 +59,30 @@ the working directory; run `create`/`remove` from `tools/WITS.Migrator`.
 check defect, and seeding has transaction/schema defects. Database selection is
 verified; successful schema setup and seed insertion remain incomplete.
 
+## Schema constraints
+
+The migration chain under `tools/WITS.Migrator/Migrations` is the canonical schema.
+
+- **Account identifiers are global to the installation**, not scoped to an
+  organisation, and are unique case-insensitively for ASCII (`COLLATE NOCASE`).
+  Registration and login trim surrounding whitespace; stored casing is otherwise
+  preserved and login matching is case-sensitive. Soft-deleted rows keep their
+  identifier, so a username or email address is never reused.
+- **Membership and grant uniqueness** is declared inline: one row per
+  `OrganizationMembers(OrganizationId, UserId)`, `ProjectMembers(ProjectId, UserId)`,
+  `UserRoles(UserId, RoleId)` and `RolePermissions(RoleId, PermissionId)`. Tags and
+  project-scoped grant tables do not exist yet; when they land, tag name/slug is
+  globally unique and ticket-tag and project-grant rows are unique per
+  ticket+tag and user+role+project.
+- **References are foreign keys.** Every runtime SQLite connection enables
+  `PRAGMA foreign_keys = ON`, so writes referencing an unknown organisation,
+  user, project, role or ticket fail with a constraint error. Migration scripts
+  run with enforcement off so tables can be created in dependency order.
+- **Required values are `NOT NULL`** in the DDL and validated again at request
+  boundaries. Registration does not rely on its check-then-insert reads:
+  concurrent duplicates are decided by the unique indexes, producing one success
+  and `409 Conflict` for the rest.
+
 ## Startup validation
 
 Before serving requests, the API checks:
@@ -189,9 +213,9 @@ or unknown refresh tokens are rejected.
 
 Endpoints:
 
-- `POST /api/v1/auth/refresh` — `{ "refreshToken": "..." }` returns a new
+- `POST /api/v1/auth/refresh` â€” `{ "refreshToken": "..." }` returns a new
   access/refresh token pair.
-- `POST /api/v1/auth/logout` — `{ "refreshToken": "..." }` revokes one token.
+- `POST /api/v1/auth/logout` â€” `{ "refreshToken": "..." }` revokes one token.
 
 Locking an account (`User.IsLocked`) blocks new logins and refresh, and revokes
 all of that account's refresh tokens. Already-issued access tokens are stateless
@@ -251,6 +275,5 @@ authentication, missing resource, duplicate/invalid input, and unreadable-body c
 plus a coverage check that fails if a route has no contract case. See
 [the endpoint tests](tests/WITS.Api.EndpointTests/EndpointContractTests.cs).
 
-The executable smoke check covers startup validation, error responses, DI, and database targeting with isolated
-fixtures. See [its README](tests/WITS.Api.SmokeTests/README.md) for scope. Run it
+The executable smoke check covers startup validation, error responses, DI, database targeting, and schema constraints with isolated fixtures. See [its README](tests/WITS.Api.SmokeTests/README.md) for scope. Run it
 explicitly; `dotnet test` does not execute it.

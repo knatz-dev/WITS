@@ -294,7 +294,7 @@ internal static class AuthenticationAbuseChecks
     private static RegisterRequest Registration() => new()
     {
         Username = "new-user", Password = Password, FirstName = "New", LastName = "User", EmailAddress = "new@example.com",
-        OrganisationId = 3, Created = DateTime.UtcNow, TelephoneNos = "000", Organisation = "Test"
+        OrganisationId = 3, TelephoneNos = "000"
     };
 
     private static void Require(bool condition, string message)

@@ -149,9 +149,7 @@ internal static class ErrorResponseChecks
         EmailAddress = $"{username}@example.com",
         OrganisationId = 1,
         Password = "password",
-        Created = DateTime.UtcNow,
-        TelephoneNos = "000",
-        Organisation = "Organisation"
+        TelephoneNos = "000"
     };
 
     private static async Task ExpectProblemAsync(HttpResponseMessage response, int expectedStatus, string context, params string[] absent)
@@ -207,12 +205,12 @@ internal static class ErrorResponseChecks
 
     private sealed class StubTicketService : ITicketService
     {
-        public Task<PagedResult<Ticket>> GetAllAsync(int page, int pageSize) =>
-            Task.FromResult(new PagedResult<Ticket>([], 0, page, pageSize));
+        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) =>
+            Task.FromResult(new PagedResult<TicketResponse>([], 0, page, pageSize));
 
-        public Task<Ticket> GetByIdAsync(long id) => Task.FromResult<Ticket>(null!);
+        public Task<TicketResponse?> GetByIdAsync(long id) => Task.FromResult<TicketResponse?>(null);
 
-        public Task<PagedResult<Ticket>> QueryAsync(GenericFilter filter) =>
-            Task.FromResult(new PagedResult<Ticket>([], 0, 1, 100));
+        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) =>
+            Task.FromResult(new PagedResult<TicketResponse>([], 0, 1, 100));
     }
 }

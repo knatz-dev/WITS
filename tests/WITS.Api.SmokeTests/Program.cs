@@ -72,3 +72,4 @@ await StartupConfigurationChecks.RunAsync();
 await DatabaseTargetChecks.RunAsync();
 await MigrationApplyChecks.RunAsync();
 await SchemaAlignmentChecks.RunAsync();
+await ConstraintChecks.RunAsync();

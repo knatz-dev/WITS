@@ -4,15 +4,12 @@
 //  Unauthorized copying, distribution, modification, or use strictly prohibited.
 //  ----------------------------------------------------------------------------------
 
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace WITS.Models;
+
+// Accepted registration input. Identifiers, timestamps and status are server-owned and
+// deliberately absent so callers cannot choose their own persistence values.
 public class RegisterRequest
 {
     [Required, StringLength(128, MinimumLength = 1)]
@@ -25,16 +22,14 @@ public class RegisterRequest
     public required string EmailAddress { get; set; }
     [Range(0, int.MaxValue)]
     public int OrganisationId { get; set; }
-    public int Status { get; set; }
-    public int RoleLevel { get; set; }
     [Required, StringLength(1024, MinimumLength = 1)]
     public required string Password { get; set; }
-    public required DateTime Created { get; set; }
     [Required, StringLength(64, MinimumLength = 1)]
     public required string TelephoneNos { get; set; }
-    [Required, StringLength(128, MinimumLength = 1)]
-    public required string Organisation { get; set; }
 }
+
+// Registration response: only the server-owned identity and the accepted fields.
+public record RegisterResponse(long Id, string Username, string EmailAddress);
 
 public class UserTokenModel
 {

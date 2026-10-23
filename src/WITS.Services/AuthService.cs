@@ -10,6 +10,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -24,7 +25,7 @@ using static WITS.Services.IAuthService;
 namespace WITS.Services;
 
 public record CredentialResult(bool Success, string? Token, string? RefreshToken = null, string Message = "");
-public record RegistrationResult(bool Success, string Message = "", bool Conflict = false);
+public record RegistrationResult(bool Success, string Message = "", bool Conflict = false, long? UserId = null);
 public record RefreshResult(bool Success, string? AccessToken, string? RefreshToken, string Message = "");
 
 public interface IAuthService
@@ -88,6 +89,7 @@ public class AuthService : IAuthService
 
     public async Task<CredentialResult> ValidateCredentialsAsync(string username, string password)
     {
+        username = username?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(username) || username.Length > 128 || password is null || password.Length > 1024)
         {
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "invalid_input"));
@@ -233,23 +235,25 @@ public class AuthService : IAuthService
 
     public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
     {
+        // Identifiers are global and stored without surrounding whitespace. The database
+        // indexes below are case-insensitive; the reads here are only a friendly fast path.
+        user.Username = user.Username?.Trim() ?? string.Empty;
+        user.EmailAddress = user.EmailAddress?.Trim() ?? string.Empty;
+
         var validationResults = new List<ValidationResult>();
         if (!Validator.TryValidateObject(user, new ValidationContext(user), validationResults, true))
         {
             var detail = string.Join(" ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
             return new RegistrationResult(false, string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail);
         }
-        if (user.Created == default)
-        {
-            return new RegistrationResult(false, "Created must be a valid UTC timestamp.");
-        }
         if (string.IsNullOrWhiteSpace(user.Username) || user.Username.Length > 128
             || string.IsNullOrEmpty(user.Password) || user.Password.Length > 1024)
         {
             return new RegistrationResult(false, "Username must be 1–128 characters and password must be 1–1024 characters.");
         }
-        // Check if user exists
-        var filter = new GenericFilter
+
+        var stopwatch = Stopwatch.StartNew();
+        var usernameFilter = new GenericFilter
         {
             PageNumber = 1,
             PageSize = 1,
@@ -259,8 +263,7 @@ public class AuthService : IAuthService
             }
         };
 
-        var stopwatch = Stopwatch.StartNew();
-        var existing = await _userRepository.QueryAsync(filter);
+        var existing = await _userRepository.QueryAsync(usernameFilter);
         if (existing.Items.Any())
         {
             _logger.LogWarning("Registration rejected for {Username}: username already exists after {ElapsedMs} ms",
@@ -268,27 +271,59 @@ public class AuthService : IAuthService
             return new RegistrationResult(false, "Username already exists", Conflict: true);
         }
 
+        var emailFilter = new GenericFilter
+        {
+            PageNumber = 1,
+            PageSize = 1,
+            Filters = new Dictionary<string, FilterCriteria>
+            {
+                { "EmailAddress", new FilterCriteria(user.EmailAddress)}
+            }
+        };
+
+        var existingEmail = await _userRepository.QueryAsync(emailFilter);
+        if (existingEmail.Items.Any())
+        {
+            _logger.LogWarning("Registration rejected for {Username}: email address already exists after {ElapsedMs} ms",
+                user.Username, stopwatch.ElapsedMilliseconds);
+            return new RegistrationResult(false, "Email address already exists", Conflict: true);
+        }
+
         // Hash password with salt
         var (hash, salt) = AuthHelper.HashPassword(user.Password);
-        user.Password = hash;
-        user.Created = DateTime.UtcNow;
 
-        int id = await _userRepository.InsertAsync(new User()
+        try
         {
-            Id = 0,
-            Username = user.Username,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            EmailAddress = user.EmailAddress,
-            PasswordHash = hash,
-            PasswordSalt = salt,
-            Created = DateTime.UtcNow,
-            OrganisationId = user.OrganisationId,
-            PhoneNumber = user.TelephoneNos
-        });
-        _logger.LogInformation("Registered user {Username} with id {UserId} after {ElapsedMs} ms",
-            user.Username, id, stopwatch.ElapsedMilliseconds);
-        return new RegistrationResult(true, $"User registered successfully with id {id}.");
+            int id = await _userRepository.InsertAsync(new User()
+            {
+                Id = 0,
+                Username = user.Username,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                EmailAddress = user.EmailAddress,
+                PasswordHash = hash,
+                PasswordSalt = salt,
+                Created = DateTime.UtcNow,
+                OrganisationId = user.OrganisationId,
+                PhoneNumber = user.TelephoneNos
+            });
+            _logger.LogInformation("Registered user {Username} with id {UserId} after {ElapsedMs} ms",
+                user.Username, id, stopwatch.ElapsedMilliseconds);
+            return new RegistrationResult(true, $"User registered successfully with id {id}.", UserId: id);
+        }
+        catch (SqliteException exception) when (exception.SqliteExtendedErrorCode == 2067) // SQLITE_CONSTRAINT_UNIQUE
+        {
+            // The unique indexes decide the winner when concurrent requests both pass the reads.
+            _logger.LogWarning(exception, "Registration rejected for {Username}: identifier already exists after {ElapsedMs} ms",
+                user.Username, stopwatch.ElapsedMilliseconds);
+            return new RegistrationResult(false, "Username or email address already exists", Conflict: true);
+        }
+        catch (SqliteException exception) when (exception.SqliteExtendedErrorCode == 787) // SQLITE_CONSTRAINT_FOREIGNKEY
+        {
+            _logger.LogWarning(exception, "Registration rejected for {Username}: organisation {OrganisationId} does not exist after {ElapsedMs} ms",
+                user.Username, user.OrganisationId, stopwatch.ElapsedMilliseconds);
+            return new RegistrationResult(false, "Organisation does not exist.");
+        }
     }
 
 }

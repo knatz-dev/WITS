@@ -1,0 +1,66 @@
+@baseUrl = http://localhost:5351
+
+# Requires DOTNET_ENVIRONMENT=Development plus a valid ConnectionStrings__DefaultConnection
+# and JwtSettings__SecurityKey (see README). Scalar UI: {{baseUrl}}/scalar
+
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "smoke",
+  "password": "password"
+}
+
+### Register (anonymous)
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "new.user",
+  "firstName": "New",
+  "lastName": "User",
+  "emailAddress": "new@example.com",
+  "password": "password",
+  "telephoneNos": "000",
+  "organisationId": 1
+}
+
+### Refresh (rotates the token; reuse revokes the family)
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.refreshToken}}"
+}
+
+### Logout (revokes one refresh token)
+POST {{baseUrl}}/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.refreshToken}}"
+}
+
+### List tickets (page is 1-based, pageSize 1-100)
+GET {{baseUrl}}/api/v1/ticket?page=1&pageSize=10
+Authorization: Bearer {{login.response.body.token}}
+
+### Get ticket by id (404 problem body when absent)
+GET {{baseUrl}}/api/v1/ticket/1
+Authorization: Bearer {{login.response.body.token}}
+
+### Query tickets (filters map column -> { value, operator }; operator defaults to EQUALS)
+POST {{baseUrl}}/api/v1/ticket/query
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "pageNumber": 1,
+  "pageSize": 10,
+  "sortColumn": null,
+  "sortOrder": "ASC",
+  "filters": {
+    "Summary": { "value": "sample", "operator": "CONTAINS" }
+  }
+}

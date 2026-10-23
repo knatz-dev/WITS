@@ -27,6 +27,7 @@ internal static class SchemaAlignmentChecks
             new Migration20250419113619ProjectSchema().Apply(connectionString);
             new Migration20250419113732TicketSchema().Apply(connectionString);
             new Migration20250419115950OrganizationAndActivitySchema().Apply(connectionString);
+            new Migration20261023090000ConstraintHardening().Apply(connectionString);
 
             using var unitOfWork = new UnitOfWork(new SQliteConnectionFactory(connectionString));
             unitOfWork.BeginTransaction();

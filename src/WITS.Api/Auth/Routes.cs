@@ -21,15 +21,36 @@ public class Routes : IEndpointDefinition
             .RequireRateLimiting(AuthenticationRateLimits.Policy);
         authGroup.MapPost("login", LoginHandler)
             .WithName("Login")
+            .WithSummary("Authenticate with username and password")
+            .WithDescription("Returns a short-lived access token and a rotating refresh token. "
+                             + "Passwords are never echoed. Rejected credentials return 401 with a generic detail.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous();
         authGroup.MapPost("register", RegisterHandler)
             .WithName("Register")
+            .WithSummary("Register a new account")
+            .WithDescription("Accepts client-owned fields only; id, timestamps, status and password hash are server-owned. "
+                             + "Returns the new identity without credentials. Duplicate usernames return 409.")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous();
         authGroup.MapPost("refresh", RefreshHandler)
             .WithName("Refresh")
+            .WithSummary("Rotate a refresh token")
+            .WithDescription("Each successful refresh returns a new access/refresh pair and invalidates the presented token. "
+                             + "Expired, revoked, unknown or reused tokens return 401.")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous();
         authGroup.MapPost("logout", LogoutHandler)
             .WithName("Logout")
+            .WithSummary("Revoke a refresh token")
+            .WithDescription("Revokes the supplied refresh token. Already-issued access tokens remain valid until they expire.")
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous();
     }
 
@@ -76,13 +97,15 @@ public class Routes : IEndpointDefinition
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<Ok<string>, ProblemHttpResult>> RegisterHandler(
+    private static async Task<Results<Ok<RegisterResponse>, ProblemHttpResult>> RegisterHandler(
         IAuthService authService, [FromBody] RegisterRequest request)
     {
         if (request is null)
         {
             return TypedResults.Problem(ApiErrors.Validation("Request body is required."));
         }
+        request.Username = request.Username?.Trim() ?? string.Empty;
+        request.EmailAddress = request.EmailAddress?.Trim() ?? string.Empty;
         var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
         var context = new System.ComponentModel.DataAnnotations.ValidationContext(request);
         if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(request, context, validationResults, validateAllProperties: true))
@@ -97,6 +120,6 @@ public class Routes : IEndpointDefinition
                 ? TypedResults.Problem(ApiErrors.Conflict(result.Message))
                 : TypedResults.Problem(ApiErrors.Validation(result.Message));
         }
-        return TypedResults.Ok(result.Message);
+        return TypedResults.Ok(new RegisterResponse(result.UserId ?? 0, request.Username, request.EmailAddress));
     }
 }

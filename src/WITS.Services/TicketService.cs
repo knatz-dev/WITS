@@ -5,14 +5,14 @@ namespace WITS.Services;
 
 public interface ITicketService
 {
-    Task<PagedResult<Ticket>> GetAllAsync(int page, int pageSize);
-    Task<Ticket> GetByIdAsync(long id);
-    Task<PagedResult<Ticket>> QueryAsync(GenericFilter filter);
+    Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize);
+    Task<TicketResponse?> GetByIdAsync(long id);
+    Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter);
 }
 
 public class TicketService : ITicketService
 {
-    public Task<PagedResult<Ticket>> GetAllAsync(int page, int pageSize) => throw new NotImplementedException();
-    public Task<Ticket> GetByIdAsync(long id) => throw new NotImplementedException();
-    public Task<PagedResult<Ticket>> QueryAsync(GenericFilter filter) => throw new NotImplementedException();
+    public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) => throw new NotImplementedException();
+    public Task<TicketResponse?> GetByIdAsync(long id) => throw new NotImplementedException();
+    public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) => throw new NotImplementedException();
 }

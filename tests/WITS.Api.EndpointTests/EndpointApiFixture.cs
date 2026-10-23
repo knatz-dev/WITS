@@ -105,12 +105,12 @@ internal sealed class StubAuthService : IAuthService
     public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user) =>
         Task.FromResult(user.Username == "existing"
             ? new RegistrationResult(false, "Username already exists", Conflict: true)
-            : new RegistrationResult(true, "User registered successfully with id 17."));
+            : new RegistrationResult(true, "User registered successfully with id 17.", UserId: 17));
 }
 
 internal sealed class StubTicketService : ITicketService
 {
-    private static readonly Ticket Ticket = new()
+    private static readonly TicketResponse Ticket = TicketResponse.From(new Ticket
     {
         Id = 1,
         Summary = "Sample ticket",
@@ -119,13 +119,13 @@ internal sealed class StubTicketService : ITicketService
         Reference = "WITS-1",
         NextAction = "None",
         ProjectCode = "WITS"
-    };
+    });
 
-    public Task<PagedResult<Ticket>> GetAllAsync(int page, int pageSize) =>
-        Task.FromResult(new PagedResult<Ticket>([Ticket], 1, page, pageSize));
+    public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) =>
+        Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, page, pageSize));
 
-    public Task<Ticket> GetByIdAsync(long id) => Task.FromResult(id == Ticket.Id ? Ticket : null!);
+    public Task<TicketResponse?> GetByIdAsync(long id) => Task.FromResult(id == Ticket.Id ? Ticket : null);
 
-    public Task<PagedResult<Ticket>> QueryAsync(GenericFilter filter) =>
-        Task.FromResult(new PagedResult<Ticket>([Ticket], 1, filter.PageNumber, filter.PageSize));
+    public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) =>
+        Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, filter.PageNumber, filter.PageSize));
 }

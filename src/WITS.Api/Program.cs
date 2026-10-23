@@ -20,6 +20,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using Microsoft.OpenApi.Models;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -94,7 +95,68 @@ builder.Services.AddSingleton<RefreshTokenStore>();
 builder.Services.AddSingleton<IPermissionService, InMemoryPermissionService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Info = new Microsoft.OpenApi.Models.OpenApiInfo
+        {
+            Title = "WITS API",
+            Version = "v1",
+            Description = "Work Item Tracking System API. All endpoints under /api/v1/. " +
+                          "Authentication uses Bearer JWT tokens. See auth endpoints for login/refresh/register."
+        };
+        
+        document.Components ??= new Microsoft.OpenApi.Models.OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["Bearer"] = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+            Description = "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer {token}'"
+        };
+        
+        // Apply security to endpoints that require authorization
+        if (document.Paths != null)
+        {
+            foreach (var path in document.Paths)
+            {
+                foreach (var operation in path.Value.Operations)
+                {
+                    // Skip auth endpoints (they have AllowAnonymous)
+                    if (path.Key.Contains("/auth/login") || path.Key.Contains("/auth/register") || 
+                        path.Key.Contains("/auth/refresh") || path.Key.Contains("/auth/logout"))
+                    {
+                        continue;
+                    }
+                    // Ticket endpoints require auth
+                    if (path.Key.Contains("/ticket"))
+                    {
+                        operation.Value.Security = new List<Microsoft.OpenApi.Models.OpenApiSecurityRequirement>
+                        {
+                            new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+                            {
+                                [new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                                {
+                                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                                    {
+                                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                        Id = "Bearer"
+                                    }
+                                }] = Array.Empty<string>()
+                            }
+                        };
+                    }
+                }
+            }
+        }
+        
+        return Task.CompletedTask;
+    });
+});
 
 builder.Services.AddSingleton<IDbConnectionFactory>(services =>
 {

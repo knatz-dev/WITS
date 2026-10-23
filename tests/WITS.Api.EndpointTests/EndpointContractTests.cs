@@ -17,11 +17,11 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
     private const string WrongPasswordBody = """{"username":"smoke","password":"wrong"}""";
     private const string NewUserBody = """
         {"username":"new.user","firstName":"New","lastName":"User","emailAddress":"new@example.com",
-         "password":"password","created":"2025-01-01T00:00:00Z","telephoneNos":"000","organisation":"Organisation"}
+         "password":"password","telephoneNos":"000","organisationId":1}
         """;
     private const string DuplicateUserBody = """
         {"username":"existing","firstName":"Existing","lastName":"User","emailAddress":"existing@example.com",
-         "password":"password","created":"2025-01-01T00:00:00Z","telephoneNos":"000","organisation":"Organisation"}
+         "password":"password","telephoneNos":"000","organisationId":1}
         """;
     private const string FilterBody = """{"pageNumber":1,"pageSize":10}""";
 
@@ -35,8 +35,14 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             WrongPasswordBody, false, false, 401, "application/problem+json"),
         new("register creates a user", "POST", "api/v1/auth/register", "/api/v1/auth/register",
             NewUserBody, false, false, 200, "application/json",
-            root => Assert.True(root.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(root.GetString()),
-                "register must return a message.")),
+            root =>
+            {
+                Assert.Equal(JsonValueKind.Object, root.ValueKind);
+                Assert.Equal(17, root.GetProperty("id").GetInt64());
+                Assert.Equal("new.user", root.GetProperty("username").GetString());
+                Assert.Equal("new@example.com", root.GetProperty("emailAddress").GetString());
+                Assert.False(root.TryGetProperty("password", out _), "register must not echo credentials.");
+            }),
         new("register rejects a duplicate", "POST", "api/v1/auth/register", "/api/v1/auth/register",
             DuplicateUserBody, false, false, 409, "application/problem+json"),
         new("login rejects an unreadable body", "POST", "api/v1/auth/login", "/api/v1/auth/login",
