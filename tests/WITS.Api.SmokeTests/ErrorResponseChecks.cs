@@ -29,7 +29,8 @@ internal static class ErrorResponseChecks
 
         using (var anonymous = await realClient.GetAsync("/api/v1/ticket"))
         {
-            await ExpectProblemAsync(anonymous, StatusCodes.Status401Unauthorized, "unauthenticated request");
+            await ExpectProblemAsync(anonymous, StatusCodes.Status401Unauthorized, "unauthenticated request",
+                "authentication_required");
             if (!anonymous.Headers.TryGetValues("WWW-Authenticate", out _))
             {
                 throw new InvalidOperationException("A 401 response must keep its WWW-Authenticate header.");
@@ -39,7 +40,7 @@ internal static class ErrorResponseChecks
         using (var failing = await AuthorizedGetAsync(realClient, token, "/api/v1/ticket"))
         {
             await ExpectProblemAsync(failing, StatusCodes.Status500InternalServerError, "unhandled service failure",
-                "NotImplementedException", "stackTrace");
+                "internal_error", "NotImplementedException", "stackTrace");
         }
 
         await using var stubHost = CreateHost(services =>
@@ -51,33 +52,37 @@ internal static class ErrorResponseChecks
 
         using (var login = await stubClient.PostAsync("/api/v1/auth/login", Json(new LoginRequest("smoke", "wrong"))))
         {
-            await ExpectProblemAsync(login, StatusCodes.Status401Unauthorized, "rejected credentials");
+            await ExpectProblemAsync(login, StatusCodes.Status401Unauthorized, "rejected credentials",
+                "invalid_credentials");
         }
 
         using (var duplicate = await stubClient.PostAsync("/api/v1/auth/register", Json(NewUser("duplicate"))))
         {
-            await ExpectProblemAsync(duplicate, StatusCodes.Status409Conflict, "duplicate registration");
+            await ExpectProblemAsync(duplicate, StatusCodes.Status409Conflict, "duplicate registration",
+                "account_exists");
         }
 
         using (var rejected = await stubClient.PostAsync("/api/v1/auth/register", Json(NewUser("new"))))
         {
-            await ExpectProblemAsync(rejected, StatusCodes.Status400BadRequest, "registration validation failure");
+            await ExpectProblemAsync(rejected, StatusCodes.Status400BadRequest, "registration validation failure",
+                "validation_failed");
         }
 
         using (var missing = await AuthorizedGetAsync(stubClient, token, "/api/v1/ticket/999"))
         {
-            await ExpectProblemAsync(missing, StatusCodes.Status404NotFound, "missing resource");
+            await ExpectProblemAsync(missing, StatusCodes.Status404NotFound, "missing resource", "not_found");
         }
 
         using (var malformed = await realClient.PostAsync(
                    "/api/v1/auth/login", new StringContent("{not-json", Encoding.UTF8, "application/json")))
         {
-            await ExpectProblemAsync(malformed, StatusCodes.Status400BadRequest, "unreadable request body");
+            await ExpectProblemAsync(malformed, StatusCodes.Status400BadRequest, "unreadable request body",
+                "invalid_request");
         }
 
         var forbidden = await InvokeForbiddenAsync(realHost);
         CheckProblem(StatusCodes.Status403Forbidden, forbidden.StatusCode, forbidden.MediaType, forbidden.Body,
-            "authorization refusal", []);
+            "authorization refusal", "forbidden", []);
 
         Console.WriteLine("PASS: 400/401/403/404/409/500 answers share one ProblemDetails shape without leaking internals.");
     }
@@ -152,14 +157,16 @@ internal static class ErrorResponseChecks
         TelephoneNos = "000"
     };
 
-    private static async Task ExpectProblemAsync(HttpResponseMessage response, int expectedStatus, string context, params string[] absent)
+    private static async Task ExpectProblemAsync(
+        HttpResponseMessage response, int expectedStatus, string context, string expectedCode, params string[] absent)
     {
         CheckProblem(expectedStatus, (int)response.StatusCode, response.Content.Headers.ContentType?.MediaType,
-            await response.Content.ReadAsStringAsync(), context, absent);
+            await response.Content.ReadAsStringAsync(), context, expectedCode, absent);
     }
 
     private static void CheckProblem(
-        int expectedStatus, int actualStatus, string? mediaType, string body, string context, string[] absent)
+        int expectedStatus, int actualStatus, string? mediaType, string body, string context,
+        string expectedCode, string[] absent)
     {
         var actualMediaType = mediaType?.Split(';')[0].Trim();
         if (actualStatus != expectedStatus || actualMediaType != "application/problem+json")
@@ -178,9 +185,11 @@ internal static class ErrorResponseChecks
         var root = problem.RootElement;
         if (!root.TryGetProperty("status", out var status) || status.GetInt32() != expectedStatus
             || !root.TryGetProperty("title", out var title) || string.IsNullOrWhiteSpace(title.GetString())
-            || !root.TryGetProperty("detail", out var detail) || string.IsNullOrWhiteSpace(detail.GetString()))
+            || !root.TryGetProperty("detail", out var detail) || string.IsNullOrWhiteSpace(detail.GetString())
+            || !root.TryGetProperty("code", out var code) || code.GetString() != expectedCode)
         {
-            throw new InvalidOperationException($"{context}: response is missing status/title/detail: {body}");
+            throw new InvalidOperationException(
+                $"{context}: expected status/title/detail with code '{expectedCode}': {body}");
         }
     }
 

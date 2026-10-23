@@ -19,7 +19,18 @@ namespace WITS.Migrator.Migrations
             CREATE UNIQUE INDEX IF NOT EXISTS idx_User_Username_NoCase
                 ON User(Username COLLATE NOCASE);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_User_EmailAddress_NoCase
-                ON User(EmailAddress COLLATE NOCASE);";
+                ON User(EmailAddress COLLATE NOCASE);
+
+            -- Optimistic concurrency: every mutable entity gets a version counter.
+            ALTER TABLE User ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE Organisation ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE Roles ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE Permissions ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE Projects ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE Tickets ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE TicketTypes ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE TicketPriorities ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;
+            ALTER TABLE TicketStatuses ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 1;";
 
         public override string DownScript => @"
             DROP INDEX IF EXISTS idx_User_EmailAddress_NoCase;

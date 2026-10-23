@@ -50,7 +50,7 @@ public class Routes : IEndpointDefinition
         var ticket = await ticketService.GetByIdAsync(id);
         if (ticket is null)
         {
-            return TypedResults.Problem(ApiErrors.NotFound($"Ticket {id} does not exist."));
+            return TypedResults.Problem(ApiErrors.NotFound($"Ticket {id} does not exist.", ApiErrorCodes.NotFound));
         }
         return TypedResults.Ok(ticket);
     }

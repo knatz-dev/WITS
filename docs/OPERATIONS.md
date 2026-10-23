@@ -1,5 +1,7 @@
 # Operational signals
 
+Database backup and restore procedure: [BACKUP.md](BACKUP.md).
+
 ## Collection destination
 
 The initial destination is **operator-owned files on the API host**: metrics as

@@ -1,13 +1,16 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Dapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WITS.Api.Auth;
+using WITS.Common;
 using WITS.Data;
 using WITS.Data.Contracts;
+using WITS.Data.Entity;
 
 namespace WITS.Api.SmokeTests;
 
@@ -97,7 +100,7 @@ internal static class DatabaseTargetChecks
             }
             Require(!File.Exists(decoy), "A tool used the working-directory database instead of the explicit target.");
             await CheckMaintenanceOutcomesAsync(migrator, seeder, temporary, environment);
-            Console.WriteLine("PASS: API/tool JSON, environment and CLI targets; migration bootstrap/inspection/rollback target isolation; maintenance-tool failure exit codes.");
+            Console.WriteLine("PASS: API/tool JSON, environment and CLI targets; migration bootstrap/inspection/rollback target isolation; repeatable seeding with working accounts; maintenance-tool failure exit codes.");
         }
         finally
         {
@@ -136,7 +139,7 @@ internal static class DatabaseTargetChecks
         {
             Require(result.ExitCode == 0, $"Inspection failed: {result.Output}");
         }
-        // Seeder data/transaction correctness is tracked separately; this checks its actual opened file.
+        // Seeder data correctness is checked in the maintenance outcomes below.
     }
 
     private static async Task<(int ExitCode, string Output)> RunToolAsync(string executable, string workingDirectory, string environment, string[] args, bool keepStdinOpen = false)
@@ -188,6 +191,50 @@ internal static class DatabaseTargetChecks
             ["--ConnectionStrings:DefaultConnection", ConnectionString(seedTarget)], keepStdinOpen: true);
         Require(seeding.ExitCode == 1 && seeding.Output.Contains("Seeding failed", StringComparison.Ordinal),
             $"Seeder failures must report the failure and exit nonzero: exit {seeding.ExitCode}, {seeding.Output}");
+
+        // Once migrated, seeding is repeatable and produces usable accounts.
+        // The failed attempt above left an empty file; start the migration from a clean target.
+        File.Delete(seedTarget);
+        var migrate = await RunToolAsync(migrator, temporary, environment,
+            ["migrate", "--ConnectionStrings:DefaultConnection", ConnectionString(seedTarget)]);
+        Require(migrate.ExitCode == 0, $"Migration of the seed target failed: {migrate.Output}");
+        for (var run = 1; run <= 2; run++)
+        {
+            var repeat = await RunToolAsync(seeder, temporary, environment,
+                ["--ConnectionStrings:DefaultConnection", ConnectionString(seedTarget)]);
+            Require(repeat.ExitCode == 0, $"Seeder run {run} failed: {repeat.Output}");
+        }
+
+        await using (var connection = new SqliteConnection(ConnectionString(seedTarget)))
+        {
+            await connection.OpenAsync();
+            var userCount = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM User");
+            Require(userCount == 2, $"Repeated seeding must not duplicate users: found {userCount}.");
+            foreach (var code in new[] { "WITS", "DEMO" })
+            {
+                var count = await connection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM Organisation WHERE Code = @Code", new { Code = code });
+                Require(count == 1, $"Repeated seeding must not duplicate organisation {code}: found {count}.");
+            }
+
+            foreach (var (username, organisationCode, password) in new[]
+            {
+                ("admin", "WITS", "Admin@2025!"),
+                ("demo", "DEMO", "demo-password!")
+            })
+            {
+                var assignedCode = await connection.QuerySingleOrDefaultAsync<string>(
+                    "SELECT o.Code FROM User u JOIN Organisation o ON o.Id = u.OrganisationId WHERE u.Username = @Username",
+                    new { Username = username });
+                Require(assignedCode == organisationCode,
+                    $"Seeded user {username} must belong to {organisationCode}, found {assignedCode ?? "<none>"}.");
+
+                var user = await connection.QuerySingleOrDefaultAsync<User>(
+                    "SELECT * FROM User WHERE Username = @Username", new { Username = username });
+                Require(user is not null && AuthHelper.VerifyPasswordHash(password, user.PasswordHash, user.PasswordSalt),
+                    $"Seeded user {username} must authenticate with the documented password.");
+            }
+        }
 
         // Migration removal must not report success when a file cannot be deleted.
         var sandbox = Path.Combine(temporary, "remove-sandbox");

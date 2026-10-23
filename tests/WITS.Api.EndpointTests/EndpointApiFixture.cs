@@ -118,7 +118,10 @@ internal sealed class StubTicketService : ITicketService
         ReportedByUsername = "smoke",
         Reference = "WITS-1",
         NextAction = "None",
-        ProjectCode = "WITS"
+        ProjectCode = "WITS",
+        // Unspecified mirrors a timestamp read back from SQLite; the API must still send it as UTC.
+        DateCreated = new DateTime(2026, 10, 23, 9, 30, 0, DateTimeKind.Unspecified),
+        DateResolved = new DateTime(2026, 10, 23, 10, 15, 0, DateTimeKind.Utc)
     });
 
     public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) =>

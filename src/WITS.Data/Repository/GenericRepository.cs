@@ -78,11 +78,26 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<int> InsertAsync(T model)
     {
-        // Every writer shares one UTC default for Created, while an explicitly
-        // supplied value (tests, seeder) is kept as-is.
+        // Audit fields are server-owned: Created is normalized to UTC, LastModified starts empty,
+        // and a new row is never born soft-deleted. Explicit UTC values (seeder, tests) are kept.
         if (model.Created == default)
         {
             model.Created = DateTime.UtcNow;
+        }
+        else if (model.Created.Kind == DateTimeKind.Local)
+        {
+            model.Created = model.Created.ToUniversalTime();
+        }
+        else
+        {
+            model.Created = DateTime.SpecifyKind(model.Created, DateTimeKind.Utc);
+        }
+        model.LastModified = null;
+        model.IsDeleted = false;
+        // Start every new row at version 1 so the first update can use the optimistic check.
+        if (model.RowVersion <= 0)
+        {
+            model.RowVersion = 1;
         }
 
         var query = $"""
@@ -99,22 +114,42 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     public async Task<bool> UpdateAsync(T model)
     {
-        model.LastModified = DateTime.UtcNow;
-        var setClause = string.Join(", ", _columnNames.Select(prop => $"{prop} = @{prop}"));
-        var query = $"UPDATE {_tableName} SET {setClause} WHERE {_primaryKeyColumn} = @Id";
+        // Optimistic concurrency: the caller's version must still match the stored row.
+        // A version of 0 means the row was never read, so there is no safe check; fail closed
+        // and require the caller to load the row first.
+        var expectedVersion = model.RowVersion;
+        if (expectedVersion <= 0)
+        {
+            return false;
+        }
 
+        model.LastModified = DateTime.UtcNow;
+        model.RowVersion = expectedVersion + 1;
+        // Created and IsDeleted are server-owned: updates cannot backdate creation or bypass
+        // DeleteByIdAsync. Deletion is always soft, through that method.
+        var setClause = string.Join(", ", _columnNames
+            .Where(prop => !string.Equals(prop, "Created", StringComparison.OrdinalIgnoreCase)
+                           && !string.Equals(prop, "IsDeleted", StringComparison.OrdinalIgnoreCase))
+            .Select(prop => $"{prop} = @{prop}"));
+        var query = $"UPDATE {_tableName} SET {setClause} WHERE {_primaryKeyColumn} = @Id AND RowVersion = @ExpectedRowVersion AND IsDeleted = 0";
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
-        var rows = await connection.ExecuteAsync(query, model, Transaction);
+        var parameters = new DynamicParameters(model);
+        parameters.Add("@ExpectedRowVersion", expectedVersion);
+        var rows = await connection.ExecuteAsync(query, parameters, Transaction);
+        if (rows == 0)
+        {
+            // Leave the caller's entity untouched so it can re-read and retry.
+            model.RowVersion = expectedVersion;
+        }
         return rows > 0;
     }
 
-    // shortcut: soft delete keeps the row, so reads hide it through the IsDeleted flag instead of
-    // erasing it, and the table must carry IsDeleted and LastModified columns — tables without them
-    // already fail the read filters. Upgrade to a hard purge only when retention demands it.
+    // Soft delete: the row is retained, reads hide it via IsDeleted, and LastModified/RowVersion
+    // advance so in-flight updates fail. Dependents are not cascaded; delete them explicitly.
     public async Task<bool> DeleteByIdAsync(TDataType id)
     {
-        var query = $"UPDATE {_tableName} SET IsDeleted = 1, LastModified = @LastModified WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
+        var query = $"UPDATE {_tableName} SET IsDeleted = 1, LastModified = @LastModified, RowVersion = RowVersion + 1 WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
         var connection = await _connectionFactory.CreateConnectionAsync();
         using var owned = _ownsConnection ? connection : null;
         var rows = await connection.ExecuteAsync(query, new { Id = id, LastModified = DateTime.UtcNow }, Transaction);

@@ -18,7 +18,7 @@ Console.WriteLine($"Database: {new SqliteConnectionStringBuilder(connectionStrin
 
 try
 {
-    DbInitializer.Initialize(new SQliteConnectionFactory(connectionString));
+    await DbInitializer.InitializeAsync(new SQliteConnectionFactory(connectionString));
 }
 catch (Exception ex)
 {
@@ -26,4 +26,5 @@ catch (Exception ex)
     return 1;
 }
 
+Console.WriteLine("Seeding complete.");
 return 0;

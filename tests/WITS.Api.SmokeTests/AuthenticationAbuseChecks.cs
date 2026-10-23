@@ -287,6 +287,7 @@ internal static class AuthenticationAbuseChecks
             "Rate limiting must return a 429 problem with usable Retry-After guidance.");
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Require(problem.RootElement.GetProperty("status").GetInt32() == 429
+            && problem.RootElement.GetProperty("code").GetString() == "rate_limited"
             && problem.RootElement.GetProperty("title").GetString() == "Too Many Requests"
             && !string.IsNullOrEmpty(problem.RootElement.GetProperty("detail").GetString()), "429 must use the shared problem shape.");
     }

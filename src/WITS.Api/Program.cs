@@ -27,6 +27,8 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new UtcDateTimeJsonConverter()));
 
 // Configure JWT Authentication
 builder.Services.AddOptions<JwtSettings>()
@@ -69,12 +71,12 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
                 context.HandleResponse();
                 context.HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.HttpContext.Response.Headers.WWWAuthenticate = "Bearer";
-                await WriteProblemAsync(context.HttpContext, ApiErrors.Unauthorized("Authentication is required to access this resource."));
+                await WriteProblemAsync(context.HttpContext, ApiErrors.Unauthorized("Authentication is required to access this resource.", ApiErrorCodes.AuthenticationRequired));
             },
             OnForbidden = async context =>
             {
                 context.HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await WriteProblemAsync(context.HttpContext, ApiErrors.Forbidden("You do not have permission to access this resource."));
+                await WriteProblemAsync(context.HttpContext, ApiErrors.Forbidden("You do not have permission to access this resource.", ApiErrorCodes.Forbidden));
             }
         };
     });
@@ -104,7 +106,9 @@ builder.Services.AddOpenApi("v1", options =>
             Title = "WITS API",
             Version = "v1",
             Description = "Work Item Tracking System API. All endpoints under /api/v1/. " +
-                          "Authentication uses Bearer JWT tokens. See auth endpoints for login/refresh/register."
+                          "Authentication uses Bearer JWT tokens. See auth endpoints for login/refresh/register. " +
+                          "All timestamps are UTC ISO 8601 values ending in Z. Errors are application/problem+json " +
+                          "with a stable machine-readable `code` extension; title and detail are English prose."
         };
         
         document.Components ??= new Microsoft.OpenApi.Models.OpenApiComponents();
@@ -215,7 +219,9 @@ app.Use(async (context, next) =>
         && !context.Response.HasStarted
         && string.IsNullOrEmpty(context.Response.ContentType))
     {
-        await WriteProblemAsync(context, ApiErrors.Validation("The request could not be read. Check the body format and supplied values."));
+        await WriteProblemAsync(context, ApiErrors.Validation(
+            "The request could not be read. Check the body format and supplied values.",
+            ApiErrorCodes.InvalidRequest));
     }
 });
 

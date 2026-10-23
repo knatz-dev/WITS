@@ -55,9 +55,33 @@ Migration apply/rollback use the exact connection string selected by the command
 entrypoint. Migration source creation/removal still resolves `Migrations/` against
 the working directory; run `create`/`remove` from `tools/WITS.Migrator`.
 
-**Current setup limitations:** migration application still has a count-cast/pending
-check defect, and seeding has transaction/schema defects. Database selection is
-verified; successful schema setup and seed insertion remain incomplete.
+**Current setup limitation:** successful setup still depends on the migration chain
+and seeder being run in order (see below); the tools do not create or validate the
+application schema themselves.
+
+## Seeding
+
+After `migrate`, run the seeder to create the development accounts. It is
+repeatable: organisations are matched by `Code` and users by `Username`, so a
+second run leaves existing rows and passwords untouched. A seeded user that was
+previously attached to the wrong organisation is moved to the canonical one.
+
+| Username | Password | Organisation |
+| --- | --- | --- |
+| `admin` | `Admin@2025!` | `WITS` |
+| `demo` | `demo-password!` | `DEMO` |
+
+These are development credentials. Change them before exposing the database.
+
+## Backup and restore
+
+The SQLite database is the only durable store. Take an online SQLite backup while
+the API runs, or a clean offline file copy after stopping it; restoring always
+requires the API to be stopped. Verify the backup, keep the JWT signing key
+separately, and apply pending migrations before serving a restored database.
+
+See [backup and restore](docs/BACKUP.md) for commands, the restore checklist, and
+the automated drill in the smoke suite.
 
 ## Schema constraints
 
@@ -128,19 +152,44 @@ build output is regenerated from the null default.
 ## Error responses
 
 Every expected failure answers with `application/problem+json` carrying `status`,
-`title`, and `detail`:
+`title`, `detail`, and a stable `code`:
 
-- Unreadable or invalid input → **400** (`Bad Request`), including malformed
-  request bodies, which the framework otherwise ends with an empty 400.
-- Missing or invalid bearer token → **401** (`Unauthorized`), keeping
-  `WWW-Authenticate`; rejected login credentials answer the same way.
-- Authenticated but disallowed → **403** (`Forbidden`).
-- Unknown resource → **404** (`Not Found`).
-- Duplicate registration → **409** (`Conflict`).
-- Authentication request limit reached → **429** (`Too Many Requests`) with
-  `Retry-After` in seconds.
-- Anything unhandled → **500** (`Internal Server Error`) with only a `traceId`;
-  the exception is logged server-side and never included in the response.
+- Unreadable or invalid input → **400** (`Bad Request`, `invalid_request` or
+  `validation_failed`), including malformed request bodies, which the framework
+  otherwise ends with an empty 400.
+- Missing or invalid bearer token → **401** (`Unauthorized`,
+  `authentication_required`), keeping `WWW-Authenticate`; rejected login
+  credentials answer the same way with `invalid_credentials`.
+- Authenticated but disallowed → **403** (`Forbidden`, `forbidden`).
+- Unknown resource → **404** (`Not Found`, `not_found`).
+- Duplicate registration → **409** (`Conflict`, `account_exists`).
+- Authentication request limit reached → **429** (`Too Many Requests`,
+  `rate_limited`) with `Retry-After` in seconds.
+- Anything unhandled → **500** (`Internal Server Error`, `internal_error`) with a
+  generic detail and a `traceId`; the exception is logged server-side and never
+  included in the response.
+
+Clients must branch on `code`, not on `status`, `title`, or `detail`. `title` and
+`detail` are English prose and may change; the codes are additive and never
+reused.
+
+## Deletion and timestamps
+
+Deletion is soft: `DeleteByIdAsync` sets `IsDeleted`, records `LastModified`, and
+bumps `RowVersion`; every read path excludes deleted rows, so by-ID reads return
+`404`. Deletes do not cascade, so dependents must be deleted explicitly in
+dependency order. `Created` and `IsDeleted` are server-owned on insert/update,
+and timestamps are UTC. Rows are retained until a retention policy defines a
+purge. See [the deletion and timestamp decision](docs/adr/0002-deletion-and-timestamps.md).
+
+## Localization and time display
+
+The API is English-only and does not negotiate `Accept-Language`. Timestamps are
+UTC ISO 8601 values ending in `Z`; clients convert them for local display. SQLite
+timestamps without a zone are treated as UTC. Translated messages and per-user
+time-zone display are added only when a consumer needs them. See
+[the localization and time decision](docs/adr/0001-localization-and-time.md) for
+the full contract.
 
 ## Password storage
 
@@ -152,10 +201,10 @@ existing hashes keep verifying.
 
 The previous HMAC-based scheme could never verify a password: hashing used a
 random HMAC key while verification used the Base64 *text* of that key, so the
-keys never matched. There is therefore nothing to migrate — legacy rows and the
-seeder's placeholder hashes fail verification and those accounts need a password
-reset once the recovery flow exists. Unrecognized or damaged stored values fail
-closed with `false` instead of throwing.
+keys never matched. There is therefore nothing to migrate — legacy rows fail
+verification and those accounts need a password reset once the recovery flow
+exists. Unrecognized or damaged stored values fail closed with `false` instead of
+throwing.
 
 ## Authentication abuse controls
 
@@ -271,7 +320,8 @@ dotnet run --project tests/WITS.Api.SmokeTests
 ```
 
 The xUnit endpoint suite runs every mapped route against an in-memory host: success,
-authentication, missing resource, duplicate/invalid input, and unreadable-body cases,
+authentication, missing resource, duplicate/invalid input, unreadable-body cases,
+UTC timestamp serialization with a trailing `Z`, and the stable problem `code`,
 plus a coverage check that fails if a route has no contract case. See
 [the endpoint tests](tests/WITS.Api.EndpointTests/EndpointContractTests.cs).
 

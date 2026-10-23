@@ -292,3 +292,4 @@ AGENTS.md
 .graphifyignore
 templates/
 architecture-analysis/
+docs/adr/

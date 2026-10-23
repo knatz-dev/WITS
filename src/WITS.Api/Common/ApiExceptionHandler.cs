@@ -6,7 +6,7 @@ using WITS.Common;
 
 namespace WITS.Api.Common;
 
-// One mapping for unhandled failures: unreadable requests stay 400, everything else becomes an opaque 500 carrying only a trace id.
+// One mapping for unhandled failures: unreadable requests stay 400, everything else becomes an opaque 500 carrying a generic detail and a trace id.
 public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
@@ -19,9 +19,13 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
 
         var invalidRequest = exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest }
             or ArgumentException;
-        var problem = invalidRequest
-            ? ApiErrors.Validation(exception.Message)
-            : ApiErrors.Internal("An error occurred while processing your request.");
+        var problem = exception switch
+        {
+            BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest } =>
+                ApiErrors.Validation(exception.Message, ApiErrorCodes.InvalidRequest),
+            ArgumentException => ApiErrors.Validation(exception.Message),
+            _ => ApiErrors.Internal("An error occurred while processing your request.")
+        };
         // The client-visible trace id: the problem-details writer overwrites traceId with this same expression.
         var traceId = Activity.Current?.Id ?? httpContext.TraceIdentifier;
         problem.Extensions["traceId"] = traceId;

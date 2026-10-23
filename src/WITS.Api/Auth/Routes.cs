@@ -61,12 +61,12 @@ public class Routes : IEndpointDefinition
             || request.Username.Length > 128 || request.Password.Length > 1024)
         {
             OperationalSignals.AuthenticationFailures.Add(1, new KeyValuePair<string, object?>("reason", "invalid_input"));
-            return TypedResults.Problem(ApiErrors.Validation("Username and password are required."));
+            return TypedResults.Problem(ApiErrors.Validation("Username and password are required.", ApiErrorCodes.ValidationFailed));
         }
         var credentialResult = await authService.ValidateCredentialsAsync(request.Username, request.Password);
         if (!credentialResult.Success)
         {
-            return TypedResults.Problem(ApiErrors.Unauthorized("Invalid credentials"));
+            return TypedResults.Problem(ApiErrors.Unauthorized("Invalid credentials", ApiErrorCodes.InvalidCredentials));
         }
         return TypedResults.Ok(new LoginResponse(credentialResult.Token, credentialResult.RefreshToken, credentialResult.Message));
     }
@@ -76,12 +76,13 @@ public class Routes : IEndpointDefinition
     {
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            return TypedResults.Problem(ApiErrors.Unauthorized("Invalid refresh token"));
+            return TypedResults.Problem(ApiErrors.Unauthorized(
+                "Invalid refresh token", ApiErrorCodes.InvalidRefreshToken));
         }
         var result = await authService.RefreshAsync(request.RefreshToken);
         if (!result.Success)
         {
-            return TypedResults.Problem(ApiErrors.Unauthorized(result.Message));
+            return TypedResults.Problem(ApiErrors.Unauthorized(result.Message, ApiErrorCodes.InvalidRefreshToken));
         }
         return TypedResults.Ok(new LoginResponse(result.AccessToken, result.RefreshToken, result.Message));
     }
@@ -91,7 +92,8 @@ public class Routes : IEndpointDefinition
     {
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            return TypedResults.Problem(ApiErrors.Unauthorized("Invalid refresh token"));
+            return TypedResults.Problem(ApiErrors.Unauthorized(
+                "Invalid refresh token", ApiErrorCodes.InvalidRefreshToken));
         }
         authService.RevokeRefreshToken(request.RefreshToken);
         return TypedResults.NoContent();
@@ -102,23 +104,27 @@ public class Routes : IEndpointDefinition
     {
         if (request is null)
         {
-            return TypedResults.Problem(ApiErrors.Validation("Request body is required."));
+            return TypedResults.Problem(ApiErrors.Validation("Request body is required.", ApiErrorCodes.InvalidRequest));
         }
         request.Username = request.Username?.Trim() ?? string.Empty;
         request.EmailAddress = request.EmailAddress?.Trim() ?? string.Empty;
+        request.FirstName = request.FirstName?.Trim() ?? string.Empty;
+        request.LastName = request.LastName?.Trim() ?? string.Empty;
+        request.Password = request.Password ?? string.Empty;
+        request.TelephoneNos = request.TelephoneNos?.Trim() ?? string.Empty;
         var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
         var context = new System.ComponentModel.DataAnnotations.ValidationContext(request);
         if (!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(request, context, validationResults, validateAllProperties: true))
         {
             var detail = string.Join(" ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
-            return TypedResults.Problem(ApiErrors.Validation(string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail));
+            return TypedResults.Problem(ApiErrors.Validation(string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail, ApiErrorCodes.ValidationFailed));
         }
         var result = await authService.RegisterUserAsync(request);
         if (!result.Success)
         {
             return result.Conflict
-                ? TypedResults.Problem(ApiErrors.Conflict(result.Message))
-                : TypedResults.Problem(ApiErrors.Validation(result.Message));
+                ? TypedResults.Problem(ApiErrors.Conflict(result.Message, ApiErrorCodes.AccountExists))
+                : TypedResults.Problem(ApiErrors.Validation(result.Message, ApiErrorCodes.ValidationFailed));
         }
         return TypedResults.Ok(new RegisterResponse(result.UserId ?? 0, request.Username, request.EmailAddress));
     }

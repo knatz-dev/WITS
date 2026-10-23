@@ -25,6 +25,10 @@ internal static class MigrationApplyChecks
             var authMigration = new Migration20250419113613AuthSchema();
             authMigration.Apply(connectionString);
             authMigration.Apply(connectionString);
+            new Migration20250419113619ProjectSchema().Apply(connectionString);
+            new Migration20250419113732TicketSchema().Apply(connectionString);
+            new Migration20250419115950OrganizationAndActivitySchema().Apply(connectionString);
+            new Migration20261023090000ConstraintHardening().Apply(connectionString);
 
             await using (var connection = new SqliteConnection(connectionString))
             {
@@ -93,6 +97,6 @@ internal static class MigrationApplyChecks
             }
         }
 
-        Console.WriteLine("PASS: System/Auth migrations apply idempotently and support Organisation/User repository inserts.");
+        Console.WriteLine("PASS: the full migration chain applies idempotently and supports Organisation/User repository inserts.");
     }
 }

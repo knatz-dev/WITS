@@ -32,7 +32,8 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             root => Assert.True(!string.IsNullOrEmpty(root.GetProperty("token").GetString()),
                 "login must return a token.")),
         new("login rejects bad credentials", "POST", "api/v1/auth/login", "/api/v1/auth/login",
-            WrongPasswordBody, false, false, 401, "application/problem+json"),
+            WrongPasswordBody, false, false, 401, "application/problem+json",
+            ExpectedCode: "invalid_credentials"),
         new("register creates a user", "POST", "api/v1/auth/register", "/api/v1/auth/register",
             NewUserBody, false, false, 200, "application/json",
             root =>
@@ -44,30 +45,44 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
                 Assert.False(root.TryGetProperty("password", out _), "register must not echo credentials.");
             }),
         new("register rejects a duplicate", "POST", "api/v1/auth/register", "/api/v1/auth/register",
-            DuplicateUserBody, false, false, 409, "application/problem+json"),
+            DuplicateUserBody, false, false, 409, "application/problem+json",
+            ExpectedCode: "account_exists"),
         new("login rejects an unreadable body", "POST", "api/v1/auth/login", "/api/v1/auth/login",
-            "{not-json", false, false, 400, "application/problem+json"),
+            "{not-json", false, false, 400, "application/problem+json",
+            ExpectedCode: "invalid_request"),
         new("register rejects an unreadable body", "POST", "api/v1/auth/register", "/api/v1/auth/register",
-            "{not-json", false, false, 400, "application/problem+json"),
+            "{not-json", false, false, 400, "application/problem+json",
+            ExpectedCode: "invalid_request"),
 
         new("ticket list requires authentication", "GET", "api/v1/ticket", "/api/v1/ticket",
-            null, true, false, 401, "application/problem+json"),
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
         new("ticket list returns a page", "GET", "api/v1/ticket", "/api/v1/ticket",
-            null, true, true, 200, "application/json", page => AssertPage(page, expectedTotal: 1)),
+            null, true, true, 200, "application/json", page =>
+            {
+                AssertPage(page, expectedTotal: 1);
+                Assert.Equal("2026-10-23T09:30:00Z",
+                    page.GetProperty("items")[0].GetProperty("dateCreated").GetString());
+                Assert.Equal("2026-10-23T10:15:00Z",
+                    page.GetProperty("items")[0].GetProperty("dateResolved").GetString());
+            }),
         new("ticket by id requires authentication", "GET", "api/v1/ticket/{id:long}", "/api/v1/ticket/1",
-            null, true, false, 401, "application/problem+json"),
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
         new("ticket by id returns the ticket", "GET", "api/v1/ticket/{id:long}", "/api/v1/ticket/1",
             null, true, true, 200, "application/json",
-            root => Assert.True(root.GetProperty("id").GetInt64() == 1,
-                "ticket by id must return the requested id.")),
+            root => Assert.Equal("2026-10-23T09:30:00Z", root.GetProperty("dateCreated").GetString())),
         new("ticket by id reports a missing ticket", "GET", "api/v1/ticket/{id:long}", "/api/v1/ticket/999",
-            null, true, true, 404, "application/problem+json"),
+            null, true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
         new("ticket query requires authentication", "POST", "api/v1/ticket/query", "/api/v1/ticket/query",
-            FilterBody, true, false, 401, "application/problem+json"),
+            FilterBody, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
         new("ticket query returns a page", "POST", "api/v1/ticket/query", "/api/v1/ticket/query",
             FilterBody, true, true, 200, "application/json", page => AssertPage(page, expectedTotal: 1)),
         new("ticket query rejects an unreadable body", "POST", "api/v1/ticket/query", "/api/v1/ticket/query",
-            "{not-json", true, true, 400, "application/problem+json"),
+            "{not-json", true, true, 400, "application/problem+json",
+            ExpectedCode: "invalid_request"),
 
         new("refresh issues tokens", "POST", "api/v1/auth/refresh", "/api/v1/auth/refresh",
             """{"refreshToken":"stub-refresh"}""", false, false, 200, "application/json",
@@ -75,11 +90,13 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
                 && !string.IsNullOrEmpty(root.GetProperty("refreshToken").GetString()),
                 "refresh must return access and refresh tokens.")),
         new("refresh rejects an invalid token", "POST", "api/v1/auth/refresh", "/api/v1/auth/refresh",
-            """{"refreshToken":"invalid"}""", false, false, 401, "application/problem+json"),
+            """{"refreshToken":"invalid"}""", false, false, 401, "application/problem+json",
+            ExpectedCode: "invalid_refresh_token"),
         new("logout revokes a refresh token", "POST", "api/v1/auth/logout", "/api/v1/auth/logout",
             """{"refreshToken":"stub-refresh"}""", false, false, 204, null),
         new("logout rejects an unreadable body", "POST", "api/v1/auth/logout", "/api/v1/auth/logout",
-            "{not-json", false, false, 400, "application/problem+json")
+            "{not-json", false, false, 400, "application/problem+json",
+            ExpectedCode: "invalid_request")
     ];
 
     private readonly EndpointApiFixture _api;
@@ -157,6 +174,12 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             $"{testCase.Name}: response is missing the problem title.");
         Assert.True(root.TryGetProperty("detail", out var detail) && !string.IsNullOrWhiteSpace(detail.GetString()),
             $"{testCase.Name}: response is missing the problem detail.");
+        Assert.True(root.TryGetProperty("code", out var code) && !string.IsNullOrWhiteSpace(code.GetString()),
+            $"{testCase.Name}: response is missing the stable problem code.");
+        if (testCase.ExpectedCode is not null)
+        {
+            Assert.Equal(testCase.ExpectedCode, code.GetString());
+        }
     }
 
     private static void AssertPage(JsonElement root, int expectedTotal)
@@ -205,5 +228,6 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         bool Authenticated,
         int ExpectedStatus,
         string? ExpectedMediaType,
-        Action<JsonElement>? Check = null);
+        Action<JsonElement>? Check = null,
+        string? ExpectedCode = null);
 }
