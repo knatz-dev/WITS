@@ -13,6 +13,20 @@ using WITS.Api.SmokeTests;
 // ASP.NET Core 9's test host discovers .sln files, but this repository uses .slnx.
 [assembly: WebApplicationFactoryContentRoot("WITS.Api", "../../../../../src/WITS.Api", "WITS.Api.csproj", "0")]
 
+if (args is ["--migration-upgrade-only"])
+{
+    await MigrationUpgradeChecks.RunAsync();
+    return;
+}
+
+await MigrationHistoryChecks.RunAsync();
+if (args is ["--migration-history-only"])
+{
+    return;
+}
+
+await MigrationUpgradeChecks.RunAsync();
+
 await using var application = new WebApplicationFactory<Routes>()
     .WithWebHostBuilder(builder =>
     {

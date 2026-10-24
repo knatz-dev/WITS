@@ -47,7 +47,7 @@ CLI overrides go **after the migrator command and its positional arguments**:
 
 ```powershell
 dotnet run --project tools/WITS.Migrator -- list-tables --environment Development --ConnectionStrings:DefaultConnection 'Data Source=C:\WITSData\Development\WITS.db'
-dotnet run --project tools/WITS.Migrator -- rollback 20250419113604 --ConnectionStrings:DefaultConnection 'Data Source=C:\WITSData\Development\WITS.db'
+dotnet run --project tools/WITS.Migrator -- migrate --ConnectionStrings:DefaultConnection 'Data Source=C:\WITSData\Development\WITS.db'
 dotnet run --project tools/WITS.Seeder -- --ConnectionStrings:DefaultConnection 'Data Source=C:\WITSData\Development\WITS.db'
 ```
 
@@ -58,6 +58,27 @@ the working directory; run `create`/`remove` from `tools/WITS.Migrator`.
 **Current setup limitation:** successful setup still depends on the migration chain
 and seeder being run in order (see below); the tools do not create or validate the
 application schema themselves.
+
+### Migration history
+
+History inspection opens the configured database and initializes a missing
+`__Migrations` table on an empty database when the SQLite open mode permits it. Existing history must
+have the canonical five columns, required constraints, and valid records. Valid
+history can be inspected in read-only mode. Incompatible history is rejected with
+an actionable error; it is never automatically replaced or repaired. Database
+inspection failures propagate and cause the tool to exit nonzero, including before
+removing supposedly pending migration source files.
+
+Each migration applies its SQL and history record in one transaction. A failure
+rolls back that migration's schema/data changes and history write; previously
+committed migrations remain applied. Re-running a current database does no work.
+The supported baseline is **fresh databases only**. Applied history must match a
+contiguous prefix of the current build's migration IDs, names, and SQL (ignoring
+line endings); future changes require new migrations. Legacy/untracked schemas
+and changed applied scripts are rejected. All current migrations are forward-only:
+rollback refuses destructive/incomplete down-scripts and out-of-order requests.
+See [migration baseline and recovery](docs/MIGRATIONS.md) for supported starting
+points, forward migration rules, and recovery procedures.
 
 ## Seeding
 

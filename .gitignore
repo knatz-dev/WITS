@@ -293,3 +293,5 @@ AGENTS.md
 templates/
 architecture-analysis/
 docs/adr/
+docs/agents/
+.scratch/

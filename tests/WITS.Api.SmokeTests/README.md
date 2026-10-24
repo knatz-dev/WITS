@@ -35,7 +35,19 @@ It also runs the real migrator and seeder against temporary SQLite files and che
 - Migration bootstrap, history inspection, and rollback use the explicit target, without touching a decoy database.
 - Maintenance outcomes are reliable: the seeder reports a real seeding failure and exits nonzero with stdin held open (no console wait), repeated seeding after migration leaves one copy of each seeded organisation/user with the documented credentials, migration removal exits nonzero and keeps the file when a deletion fails (`remove <id>` and `remove all`, using an exclusively-open file on Windows), and successful removal exits zero and deletes the file.
 
-The seeder check verifies the file it opens, the nonzero failure exit on an unmigrated database, and repeatable success after migration (correct organisation membership and working passwords). Migration bootstrap is verified on the selected file; the full migration chain is exercised by the schema-alignment check. A synthetic history row exercises rollback independently.
+The seeder check verifies the file it opens, the nonzero failure exit on an unmigrated database, and repeatable success after migration (correct organisation membership and working passwords). Migration bootstrap is verified on the selected file; the full migration chain is exercised by the schema-alignment check. An out-of-order rollback against the actual selected history must fail without removing its record.
+
+Migration-history checks cover new and existing-empty files, partial/current migration states, read-only and shared-memory inspection, incompatible schemas/records, and locked/corrupt/missing targets. Real CLI checks require inspection/migrate/rollback/remove to reject incompatible history with exit code 1 while preserving the database byte-for-byte. Injected SQL and history-write failures must roll back DDL, data changes, and history without disturbing previously applied migrations. These checks run with the full suite or alone:
+
+```sh
+dotnet run --project tests/WITS.Api.SmokeTests -- --migration-history-only
+```
+
+Migration-upgrade checks verify the fresh-only baseline: populated forward progression retains long IDs, credentials, relationships, constraints, timestamps, and earlier history. Unknown/gapped/edited history and untracked legacy schemas must be rejected without changing the database. Real CLI checks verify unsafe/out-of-order rollback refusal; an isolated opt-in index migration verifies rollback failure atomicity, successful latest rollback, and reapplication. A deliberate constraint failure followed by an explicit data correction verifies forward recovery. Run this group alone with:
+
+```sh
+dotnet run --project tests/WITS.Api.SmokeTests -- --migration-upgrade-only
+```
 
 Backup/restore checks apply the full migration chain to a WAL-mode database, take an online backup, write a canary afterwards, and then replace the database file as a restore would. They require the backup to pass `PRAGMA integrity_check`, omit the canary, and retain the account; the restored file must pass integrity, omit the canary, keep the full migration history, and authenticate the account through the real authentication service. See [backup and restore](../../docs/BACKUP.md).
 

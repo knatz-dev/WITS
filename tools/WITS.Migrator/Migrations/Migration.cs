@@ -14,10 +14,32 @@ namespace WITS.Migrator.Migrations
         public abstract string Name { get; }
         public abstract string UpScript { get; }
         public abstract string DownScript { get; }
+        // Opt in only when rollback preserves application data and restores the prior schema.
+        public virtual bool SupportsRollback => false;
 
-        protected static void EnsureDatabaseExists(string connectionString)
+        internal bool IsApplied(SqliteConnection connection, SqliteTransaction? transaction = null)
+        {
+            using var command = new SqliteCommand("SELECT Name, Script FROM __Migrations WHERE MigrationId = @MigrationId", connection, transaction);
+            command.Parameters.AddWithValue("@MigrationId", MigrationId);
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return false;
+            }
+            if (reader.GetString(0) != Name || reader.GetString(1).ReplaceLineEndings("\n") != UpScript.ReplaceLineEndings("\n"))
+            {
+                throw new InvalidOperationException($"Applied migration {MigrationId} differs from this build. Applied migrations are immutable; use a matching build or a fresh database, and add future changes as new migrations.");
+            }
+            return true;
+        }
+
+        internal static void EnsureDatabaseDirectory(string connectionString)
         {
             var builder = new SqliteConnectionStringBuilder(connectionString);
+            if (builder.Mode != SqliteOpenMode.ReadWriteCreate || builder.DataSource == ":memory:")
+            {
+                return;
+            }
             var dataSource = builder.DataSource;
             var dataDirectory = Path.GetDirectoryName(dataSource);
 
@@ -26,27 +48,11 @@ namespace WITS.Migrator.Migrations
                 Console.WriteLine($"Creating data directory at {dataDirectory}");
                 Directory.CreateDirectory(dataDirectory);
             }
-
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
-
-            using var cmd = new SqliteCommand(@"
-                CREATE TABLE IF NOT EXISTS __Migrations (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    MigrationId TEXT NOT NULL UNIQUE,
-                    Name TEXT NOT NULL,
-                    AppliedAt DATETIME NOT NULL,
-                    Script TEXT NOT NULL
-                );
-
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_migrationid ON __Migrations(MigrationId);
-                CREATE INDEX IF NOT EXISTS idx_migrations_id ON __Migrations(MigrationId);", connection);
-            cmd.ExecuteNonQuery();
         }
 
         public void Apply(string connectionString)
         {
-            EnsureDatabaseExists(connectionString);
+            EnsureDatabaseDirectory(connectionString);
 
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
@@ -54,14 +60,8 @@ namespace WITS.Migrator.Migrations
             using var transaction = connection.BeginTransaction();
             try
             {
-                // Check if migration already applied
-                var checkSql = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = @MigrationId";
-                using var checkCmd = new SqliteCommand(checkSql, connection, transaction);
-                checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
-                var scalar = checkCmd.ExecuteScalar();
-                long exists = scalar == null || scalar == DBNull.Value ? 0L : Convert.ToInt64(scalar);
-
-                if (exists == 0)
+                Migrator.EnsureMigrationsTable(connection, transaction);
+                if (!IsApplied(connection, transaction))
                 {
                     // Apply migration
                     using var cmd = new SqliteCommand(UpScript, connection, transaction);
@@ -100,7 +100,7 @@ namespace WITS.Migrator.Migrations
 
         public void Rollback(string connectionString)
         {
-            EnsureDatabaseExists(connectionString);
+            EnsureDatabaseDirectory(connectionString);
 
             using var connection = new SqliteConnection(connectionString);
             connection.Open();
@@ -108,16 +108,21 @@ namespace WITS.Migrator.Migrations
             using var transaction = connection.BeginTransaction();
             try
             {
-                // Only rollback if this migration was applied
-                var checkSql = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = @MigrationId";
-                using var checkCmd = new SqliteCommand(checkSql, connection, transaction);
-                checkCmd.Parameters.AddWithValue("@MigrationId", MigrationId);
-                var scalar = checkCmd.ExecuteScalar();
-                long exists = scalar == null || scalar == DBNull.Value ? 0L : Convert.ToInt64(scalar);
-                if (exists == 0)
+                Migrator.EnsureMigrationsTable(connection, transaction);
+                if (!IsApplied(connection, transaction))
                 {
                     transaction.Commit();
                     return;
+                }
+
+                using var latest = new SqliteCommand("SELECT MigrationId FROM __Migrations ORDER BY MigrationId DESC LIMIT 1", connection, transaction);
+                if ((string?)latest.ExecuteScalar() != MigrationId)
+                {
+                    throw new InvalidOperationException($"Only the latest applied migration can be rolled back; {MigrationId} has later applied migrations.");
+                }
+                if (!SupportsRollback)
+                {
+                    throw new InvalidOperationException($"Migration {MigrationId} is forward-only: its rollback has not been verified to preserve data and restore the prior schema. Use a matching backup/build or a fresh database instead.");
                 }
 
                 // Apply rollback script

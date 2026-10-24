@@ -1,6 +1,5 @@
 ﻿using System.Reflection;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 using WITS.Migrator.Migrations;
 // ----------------------------------------------------------------------------------
@@ -74,8 +73,10 @@ namespace WITS.Migrator
                             --     CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                             -- )"";
 
-                        public override string DownScript => @""
-                            -- TODO: Add your rollback SQL here
+                         public override string DownScript => @""
+                            -- Rollback is disabled by default. Override SupportsRollback only after verifying
+                            -- that this script preserves application data and restores the prior schema.
+                             -- TODO: Add your rollback SQL here
                             -- Example: DROP TABLE IF EXISTS TableName"";
                     }}
                 }}
@@ -90,22 +91,79 @@ namespace WITS.Migrator
         }
 
         /// <summary>
-        /// Ensures the migrations table exists in the database.
+        /// Creates missing history and rejects incompatible history without repairing it.
         /// </summary>
         /// <param name="connection">Database connection</param>
-        public static void EnsureMigrationsTable(SqliteConnection connection)
+        public static void EnsureMigrationsTable(SqliteConnection connection, SqliteTransaction? transaction = null)
         {
-            var command = connection.CreateCommand();
-            command.CommandText = @"
-                CREATE TABLE IF NOT EXISTS __Migrations (
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_schema WHERE name = '__Migrations' COLLATE NOCASE";
+            if ((long)command.ExecuteScalar()! == 0)
+            {
+                command.CommandText = "SELECT COUNT(*) FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*'";
+                if ((long)command.ExecuteScalar()! != 0)
+                {
+                    throw new InvalidOperationException("Untracked application schema: __Migrations is missing. This build supports fresh databases only; use a new empty database or a matching backup/build instead of guessing migration history.");
+                }
+                command.CommandText = """
+                CREATE TABLE __Migrations (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     MigrationId TEXT NOT NULL UNIQUE,
                     Name TEXT NOT NULL,
                     AppliedAt DATETIME NOT NULL,
                     Script TEXT NOT NULL
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_migrations_migrationid ON __Migrations(MigrationId);";
-            command.ExecuteNonQuery();
+                """;
+                command.ExecuteNonQuery();
+            }
+
+            // Validate before any write to existing history, including attempts to add indexes.
+            command.CommandText = """
+                SELECT
+                    EXISTS (SELECT 1 FROM sqlite_schema
+                            WHERE name = '__Migrations' COLLATE NOCASE AND type = 'table')
+                    AND (SELECT COUNT(*) FROM pragma_table_xinfo('__Migrations')) = 5
+                    AND (SELECT COUNT(*) FROM pragma_table_xinfo('__Migrations')
+                         WHERE hidden = 0 AND (
+                             (name = 'Id' AND upper(type) = 'INTEGER' AND pk = 1)
+                             OR (name IN ('MigrationId', 'Name', 'Script')
+                                 AND upper(type) = 'TEXT' AND "notnull" = 1 AND pk = 0)
+                             OR (name = 'AppliedAt' AND upper(type) = 'DATETIME'
+                                 AND "notnull" = 1 AND pk = 0))) = 5
+                    AND EXISTS (
+                        SELECT 1 FROM pragma_index_list('__Migrations') AS indexes
+                        WHERE indexes."unique" = 1 AND indexes.partial = 0
+                          AND (SELECT COUNT(*) FROM pragma_index_info(indexes.name)) = 1
+                          AND EXISTS (SELECT 1 FROM pragma_index_info(indexes.name)
+                                      WHERE name = 'MigrationId'));
+                """;
+            if ((long)command.ExecuteScalar()! != 1)
+            {
+                throw new InvalidOperationException("Incompatible __Migrations schema. Restore a valid backup or explicitly repair the history schema before retrying; history was not replaced.");
+            }
+
+            command.CommandText = """
+                SELECT EXISTS (SELECT 1 FROM __Migrations
+                    WHERE typeof(MigrationId) <> 'text' OR length(trim(MigrationId)) = 0
+                       OR typeof(Name) <> 'text' OR length(trim(Name)) = 0
+                       OR typeof(AppliedAt) <> 'text' OR julianday(AppliedAt) IS NULL
+                       OR typeof(Script) <> 'text');
+                """;
+            if ((long)command.ExecuteScalar()! == 1)
+            {
+                throw new InvalidOperationException("Invalid __Migrations records. Restore a valid backup or explicitly repair the history records before retrying; history was not replaced.");
+            }
+
+            command.CommandText = """
+                SELECT NOT EXISTS (SELECT 1 FROM __Migrations)
+                    AND EXISTS (SELECT 1 FROM sqlite_schema
+                                WHERE name NOT GLOB 'sqlite_*' AND tbl_name <> '__Migrations' COLLATE NOCASE);
+                """;
+            if ((long)command.ExecuteScalar()! == 1)
+            {
+                throw new InvalidOperationException("Untracked application schema: __Migrations is empty but application objects exist. Use a fresh database or a matching backup/build instead of inventing applied history.");
+            }
         }
 
         /// <summary>
@@ -115,36 +173,15 @@ namespace WITS.Migrator
         public HashSet<string> GetAppliedMigrations()
         {
             var appliedMigrations = new HashSet<string>();
-            var builder = new SqliteConnectionStringBuilder(_connectionString);
-
-            if (!File.Exists(builder.DataSource))
-            {
-                return appliedMigrations;
-            }
-
+            Migration.EnsureDatabaseDirectory(_connectionString);
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
-
-            try
+            EnsureMigrationsTable(connection);
+            using var cmd = new SqliteCommand("SELECT MigrationId FROM __Migrations", connection);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                using var cmd = new SqliteCommand("SELECT MigrationId FROM __Migrations", connection);
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    appliedMigrations.Add(reader.GetString(0));
-                }
-            }
-            catch (SqliteException)
-            {
-                // If __Migrations table doesn't exist or is malformed, bootstrap it and treat as uninitialized.
-                try
-                {
-                    EnsureMigrationsTable(connection);
-                }
-                catch
-                {
-                    // best effort
-                }
+                appliedMigrations.Add(reader.GetString(0));
             }
 
             return appliedMigrations;
@@ -188,8 +225,9 @@ namespace WITS.Migrator
         /// <returns>Dictionary of migration IDs and their status</returns>
         public static async Task<Dictionary<string, string>> GetMigrationStatus(SqliteConnection connection)
         {
+            EnsureMigrationsTable(connection);
             var appliedMigrations = new Dictionary<string, string>();
-            var command = connection.CreateCommand();
+            using var command = connection.CreateCommand();
             command.CommandText = "SELECT MigrationId FROM __Migrations;";
             using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -295,7 +333,7 @@ namespace WITS.Migrator
         /// <returns>Exit code (0 for success, non-zero for failure)</returns>
         public int Migrate()
         {
-            var migrations = GetMigrations();
+            var migrations = GetMigrations().ToList();
             if (!migrations.Any())
             {
                 AnsiConsole.MarkupLine("[yellow]No migrations found to apply.[/]");
@@ -303,6 +341,21 @@ namespace WITS.Migrator
             }
 
             var applied = GetAppliedMigrations();
+            if (!applied.SetEquals(migrations.Take(applied.Count).Select(m => m.MigrationId)))
+            {
+                throw new InvalidOperationException("Unsupported migration history: applied IDs must be a contiguous prefix of this build's migrations. Unknown or missing migrations require a matching build or a fresh database.");
+            }
+            using (var connection = new SqliteConnection(_connectionString))
+            {
+                connection.Open();
+                foreach (var migration in migrations.Take(applied.Count))
+                {
+                    if (!migration.IsApplied(connection))
+                    {
+                        throw new InvalidOperationException("Migration history changed during validation. Stop other migration processes and retry.");
+                    }
+                }
+            }
             var pending = migrations.Where(m => !applied.Contains(m.MigrationId)).ToList();
             if (!pending.Any())
             {

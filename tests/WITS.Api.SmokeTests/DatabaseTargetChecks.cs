@@ -72,16 +72,13 @@ internal static class DatabaseTargetChecks
             var migrationTarget = Path.Combine(temporary, "migration.db");
             var migrationResult = await RunToolAsync(migrator, temporary, environment,
                 ["migrate", "--ConnectionStrings:DefaultConnection", ConnectionString(migrationTarget)]);
-            Require(File.Exists(migrationTarget), $"Migration did not open the supplied target: {migrationResult.Output}");
+            Require(migrationResult.ExitCode == 0 && File.Exists(migrationTarget), $"Migration did not complete on the supplied target: {migrationResult.Output}");
             using (var connection = new SqliteConnection(ConnectionString(migrationTarget)))
             {
                 await connection.OpenAsync();
                 using var command = connection.CreateCommand();
                 command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE name = '__Migrations'";
                 Require((long)(await command.ExecuteScalarAsync())! == 1, "Migration bootstrap used a different database.");
-                // Apply currently fails at its existing COUNT cast; test targeting independently of that defect.
-                command.CommandText = "INSERT OR IGNORE INTO __Migrations (MigrationId, Name, AppliedAt, Script) VALUES ('20250419113604', 'SystemSchema', CURRENT_TIMESTAMP, '')";
-                await command.ExecuteNonQueryAsync();
             }
 
             var listing = await RunToolAsync(migrator, temporary, environment,
@@ -90,13 +87,14 @@ internal static class DatabaseTargetChecks
                 $"Inspection did not see the selected database's migration history: {listing.Output}");
             var rollback = await RunToolAsync(migrator, temporary, environment,
                 ["rollback", "20250419113604", "--ConnectionStrings:DefaultConnection", ConnectionString(migrationTarget)]);
-            Require(rollback.ExitCode == 0, $"Rollback failed: {rollback.Output}");
+            Require(rollback.ExitCode == 1 && rollback.Output.Contains("latest", StringComparison.OrdinalIgnoreCase),
+                $"Out-of-order rollback must fail on the selected target: {rollback.Output}");
             using (var connection = new SqliteConnection(ConnectionString(migrationTarget)))
             {
                 await connection.OpenAsync();
                 using var command = connection.CreateCommand();
                 command.CommandText = "SELECT COUNT(*) FROM __Migrations WHERE MigrationId = '20250419113604'";
-                Require((long)(await command.ExecuteScalarAsync())! == 0, "Rollback used a different database.");
+                Require((long)(await command.ExecuteScalarAsync())! == 1, "Rejected rollback must preserve the selected database's history.");
             }
             Require(!File.Exists(decoy), "A tool used the working-directory database instead of the explicit target.");
             await CheckMaintenanceOutcomesAsync(migrator, seeder, temporary, environment);
@@ -142,7 +140,7 @@ internal static class DatabaseTargetChecks
         // Seeder data correctness is checked in the maintenance outcomes below.
     }
 
-    private static async Task<(int ExitCode, string Output)> RunToolAsync(string executable, string workingDirectory, string environment, string[] args, bool keepStdinOpen = false)
+    internal static async Task<(int ExitCode, string Output)> RunToolAsync(string executable, string workingDirectory, string environment, string[] args, bool keepStdinOpen = false)
     {
         var start = new ProcessStartInfo("dotnet")
         {
