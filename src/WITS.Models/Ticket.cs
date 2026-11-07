@@ -20,7 +20,7 @@ public class Ticket
     public required string ReportedByUsername { get; set; }
     public string? ContactEmail { get; set; }
     public string? Details { get; set; }
-    public int ProjectId { get; set; }
+    public long ProjectId { get; set; }
     public required string ProjectCode { get; set; }
     public string TicketRef => $"{ProjectCode}-{Id:D8}";
 }
@@ -42,7 +42,7 @@ public sealed record TicketResponse(
     long? Assignee,
     string? ContactEmail,
     string? Details,
-    int ProjectId,
+    long ProjectId,
     string ProjectCode,
     string NextAction)
 {

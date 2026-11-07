@@ -214,12 +214,12 @@ internal static class ErrorResponseChecks
 
     private sealed class StubTicketService : ITicketService
     {
-        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) =>
+        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PagedResult<TicketResponse>([], 0, page, pageSize));
 
-        public Task<TicketResponse?> GetByIdAsync(long id) => Task.FromResult<TicketResponse?>(null);
+        public Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult<TicketResponse?>(null);
 
-        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) =>
+        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PagedResult<TicketResponse>([], 0, 1, 100));
     }
 }

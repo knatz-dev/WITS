@@ -33,13 +33,13 @@ public class Routes : IEndpointDefinition
     }
 
     private static async Task<Ok<PagedResult<ProjectResponse>>> GetAllHandler(
-        IProjectService service, int page = 1, int pageSize = 100) =>
-        TypedResults.Ok(await service.GetAllAsync(page, pageSize));
+        IProjectService service, int page = 1, int pageSize = 100, CancellationToken cancellationToken = default) =>
+        TypedResults.Ok(await service.GetAllAsync(page, pageSize, cancellationToken));
 
     private static async Task<Results<Ok<ProjectResponse>, ProblemHttpResult>> GetByIdHandler(
-        IProjectService service, long id)
+        IProjectService service, long id, CancellationToken cancellationToken = default)
     {
-        var project = await service.GetByIdAsync(id);
+        var project = await service.GetByIdAsync(id, cancellationToken);
         if (project is null)
         {
             return TypedResults.Problem(ApiErrors.NotFound($"Project {id} does not exist.", ApiErrorCodes.NotFound));
@@ -48,6 +48,6 @@ public class Routes : IEndpointDefinition
     }
 
     private static async Task<Ok<PagedResult<ProjectResponse>>> QueryHandler(
-        IProjectService service, [FromBody] GenericFilter filter) =>
-        TypedResults.Ok(await service.QueryAsync(filter));
+        IProjectService service, [FromBody] GenericFilter filter, CancellationToken cancellationToken = default) =>
+        TypedResults.Ok(await service.QueryAsync(filter, cancellationToken));
 }

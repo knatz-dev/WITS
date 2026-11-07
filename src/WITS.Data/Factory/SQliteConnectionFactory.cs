@@ -27,6 +27,7 @@ public class SQliteConnectionFactory : IDbConnectionFactory
         SqliteConnection connection = new(_connectionString);
         connection.Open();
         connection.Execute("PRAGMA foreign_keys = ON;");
+        connection.Execute("PRAGMA busy_timeout = 5000;");
         return connection;
     }
 
@@ -34,7 +35,8 @@ public class SQliteConnectionFactory : IDbConnectionFactory
     {
         SqliteConnection connection = new(_connectionString);
         await connection.OpenAsync(token);
-        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        await connection.ExecuteAsync(new CommandDefinition("PRAGMA foreign_keys = ON;", cancellationToken: token));
+        await connection.ExecuteAsync(new CommandDefinition("PRAGMA busy_timeout = 5000;", cancellationToken: token));
         return connection;
     }
 }

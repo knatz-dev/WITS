@@ -21,6 +21,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
     private readonly bool _ownsConnection;
     private readonly string _tableName;
     private readonly List<string> _columnNames;
+    private readonly Dictionary<string, Type> _columnTypes;
     private readonly string _primaryKeyColumn;
 
     public GenericRepository(IDbConnectionFactory connectionFactory, Func<IDbTransaction?>? currentTransaction = null, bool ownsConnection = true)
@@ -38,6 +39,10 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
             .Where(p => !string.Equals(p.Name, "Id", StringComparison.OrdinalIgnoreCase) && IsStoredColumn(p))
             .Select(p => p.Name)
             .ToList();
+
+        _columnTypes = props
+            .Where(IsStoredColumn)
+            .ToDictionary(p => p.Name, p => Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType, StringComparer.OrdinalIgnoreCase);
 
         _primaryKeyColumn = props.FirstOrDefault(p => p.Name.Equals("Id", StringComparison.OrdinalIgnoreCase))?.Name
                             ?? props.FirstOrDefault(p => p.Name.Equals($"{TypeName}Id", StringComparison.OrdinalIgnoreCase))?.Name
@@ -63,20 +68,87 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                || type == typeof(TimeSpan)
                || type == typeof(Guid)
                || type == typeof(byte[]);
+
+    }
+
+    private static void ValidateFilterValue(string property, Type propertyType, string op, object? value)
+    {
+        if (value is null)
+        {
+            if (op != "EQUALS" && op != "=")
+            {
+                throw new ArgumentException($"Filter value for '{property}' cannot be null for operator '{op}'.", nameof(property));
+            }
+
+            var nullable = !propertyType.IsValueType || Nullable.GetUnderlyingType(propertyType) is not null;
+            if (!nullable)
+            {
+                throw new ArgumentException($"Filter value for '{property}' cannot be null.", nameof(property));
+            }
+
+            return;
+        }
+
+        if (op == "CONTAINS")
+        {
+            if (propertyType != typeof(string))
+            {
+                throw new ArgumentException($"Operator 'CONTAINS' is not supported for '{property}'.", nameof(property));
+            }
+
+            return;
+        }
+
+        var runtimeType = value.GetType();
+        if (runtimeType == propertyType)
+        {
+            return;
+        }
+
+        if (propertyType.IsEnum)
+        {
+            if (value is string enumText && Enum.IsDefined(propertyType, enumText))
+            {
+                return;
+            }
+
+            throw new ArgumentException($"Filter value for '{property}' is not a valid enum value.", nameof(property));
+        }
+
+        if (propertyType == typeof(string))
+        {
+            return;
+        }
+
+        if (propertyType.IsPrimitive || propertyType == typeof(decimal) || propertyType == typeof(DateTime)
+            || propertyType == typeof(DateTimeOffset) || propertyType == typeof(TimeSpan) || propertyType == typeof(Guid))
+        {
+            try
+            {
+                _ = Convert.ChangeType(value, propertyType);
+                return;
+            }
+            catch
+            {
+                throw new ArgumentException($"Filter value for '{property}' is not compatible with {propertyType.Name}.", nameof(property));
+            }
+        }
+
+        throw new ArgumentException($"Filter value for '{property}' is not compatible with {propertyType.Name}.", nameof(property));
     }
 
     // Live view of the owning transaction: repositories cached before BeginTransaction must still enlist.
     private IDbTransaction? Transaction => _currentTransaction?.Invoke();
 
-    public async Task<T?> GetByIdAsync(TDataType id)
+    public async Task<T?> GetByIdAsync(TDataType id, CancellationToken cancellationToken = default)
     {
         var query = $"SELECT * FROM {_tableName} WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
-        return await connection.QuerySingleOrDefaultAsync<T>(query, new { Id = id }, Transaction);
+        return await connection.QuerySingleOrDefaultAsync<T>(new CommandDefinition(query, new { Id = id }, Transaction, cancellationToken: cancellationToken));
     }
 
-    public async Task<int> InsertAsync(T model)
+    public async Task<TDataType> InsertAsync(T model, CancellationToken cancellationToken = default)
     {
         // Audit fields are server-owned: Created is normalized to UTC, LastModified starts empty,
         // and a new row is never born soft-deleted. Explicit UTC values (seeder, tests) are kept.
@@ -106,13 +178,13 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                      SELECT last_insert_rowid();
                      """;
 
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
-        var id = await connection.ExecuteScalarAsync<long>(query, model, Transaction);
-        return (int)id;
+        var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(query, model, Transaction, cancellationToken: cancellationToken));
+        return (TDataType)Convert.ChangeType(id, typeof(TDataType));
     }
 
-    public async Task<bool> UpdateAsync(T model)
+    public async Task<bool> UpdateAsync(T model, CancellationToken cancellationToken = default)
     {
         // Optimistic concurrency: the caller's version must still match the stored row.
         // A version of 0 means the row was never read, so there is no safe check; fail closed
@@ -132,11 +204,11 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                            && !string.Equals(prop, "IsDeleted", StringComparison.OrdinalIgnoreCase))
             .Select(prop => $"{prop} = @{prop}"));
         var query = $"UPDATE {_tableName} SET {setClause} WHERE {_primaryKeyColumn} = @Id AND RowVersion = @ExpectedRowVersion AND IsDeleted = 0";
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
         var parameters = new DynamicParameters(model);
         parameters.Add("@ExpectedRowVersion", expectedVersion);
-        var rows = await connection.ExecuteAsync(query, parameters, Transaction);
+        var rows = await connection.ExecuteAsync(new CommandDefinition(query, parameters, Transaction, cancellationToken: cancellationToken));
         if (rows == 0)
         {
             // Leave the caller's entity untouched so it can re-read and retry.
@@ -147,26 +219,26 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
 
     // Soft delete: the row is retained, reads hide it via IsDeleted, and LastModified/RowVersion
     // advance so in-flight updates fail. Dependents are not cascaded; delete them explicitly.
-    public async Task<bool> DeleteByIdAsync(TDataType id)
+    public async Task<bool> DeleteByIdAsync(TDataType id, CancellationToken cancellationToken = default)
     {
         var query = $"UPDATE {_tableName} SET IsDeleted = 1, LastModified = @LastModified, RowVersion = RowVersion + 1 WHERE {_primaryKeyColumn} = @Id AND IsDeleted = 0";
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
-        var rows = await connection.ExecuteAsync(query, new { Id = id, LastModified = DateTime.UtcNow }, Transaction);
+        var rows = await connection.ExecuteAsync(new CommandDefinition(query, new { Id = id, LastModified = DateTime.UtcNow }, Transaction, cancellationToken: cancellationToken));
         return rows > 0;
     }
 
-    public async Task<PagedResult<T>> GetAllAsync(int pageNumber = 1, int pageSize = 100)
+    public async Task<PagedResult<T>> GetAllAsync(int pageNumber = 1, int pageSize = 100, CancellationToken cancellationToken = default)
     {
         if (pageNumber < 1) throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be at least 1.");
         if (pageSize < 1 || pageSize > MaxPageSize) throw new ArgumentOutOfRangeException(nameof(pageSize), $"Page size must be between 1 and {MaxPageSize}.");
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
 
         var totalQuery = $"SELECT COUNT(*) FROM {_tableName} WHERE IsDeleted = 0";
-        var totalRecords = await connection.ExecuteScalarAsync<int>(totalQuery, Transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(new CommandDefinition(totalQuery, transaction: Transaction, cancellationToken: cancellationToken));
 
-        var offset = (pageNumber - 1) * pageSize;
+        var offset = (long)(pageNumber - 1) * pageSize;
 
         var query = $"""
                      SELECT * FROM {_tableName}
@@ -179,19 +251,19 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", pageSize);
 
-        var items = (await connection.QueryAsync<T>(query, parameters, Transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(new CommandDefinition(query, parameters, Transaction, cancellationToken: cancellationToken))).ToList();
 
         return new PagedResult<T>(items, totalRecords, pageNumber, pageSize);
     }
 
-    public async Task<PagedResult<T>> QueryAsync(GenericFilter filter)
+    public async Task<PagedResult<T>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
         if (filter.PageNumber < 1) throw new ArgumentOutOfRangeException(nameof(filter), "Page number must be at least 1.");
         if (filter.PageSize < 1 || filter.PageSize > MaxPageSize) throw new ArgumentOutOfRangeException(nameof(filter), $"Page size must be between 1 and {MaxPageSize}.");
         if (filter.SortOrder is not null && filter.SortOrder is not ("" or "ASC" or "DESC" or "asc" or "desc"))
             throw new ArgumentException("Sort order must be ASC or DESC.", nameof(filter));
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
 
         var parameters = new DynamicParameters();
@@ -217,8 +289,15 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                 var knownOps = new[] { "CONTAINS", "GT", ">", "GTE", ">=", "LT", "<", "LTE", "<=", "EQUALS", "=" };
                 if (!knownOps.Contains(op)) throw new ArgumentException($"Unknown filter operator '{criteria.Operator}'.", nameof(filter));
 
+                if (!_columnTypes.TryGetValue(property, out var propertyType))
+                {
+                    throw new ArgumentException($"Unknown filter field '{property}'.", nameof(filter));
+                }
+
                 var paramName = $"@p{paramIndex++}";
                 var value = criteria.Value is JsonElement json ? json.ToPrimitive() : criteria.Value;
+
+                ValidateFilterValue(property, propertyType, op, value);
 
                 switch (op)
                 {
@@ -258,7 +337,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         var whereClause = whereConditions.Count > 0 ? $"WHERE {string.Join(" AND ", whereConditions)}" : "";
 
         var countQuery = $"SELECT COUNT(*) FROM {_tableName} {whereClause}";
-        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, Transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(new CommandDefinition(countQuery, parameters, Transaction, cancellationToken: cancellationToken));
 
         string sortColumn;
         if (string.IsNullOrWhiteSpace(filter.SortColumn))
@@ -276,26 +355,30 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
         }
 
         var sortOrder = filter.SortOrder?.ToUpperInvariant() == "DESC" ? "DESC" : "ASC";
-        var offset = (filter.PageNumber - 1) * filter.PageSize;
+        var offset = (long)(filter.PageNumber - 1) * filter.PageSize;
+
+        var orderBy = sortColumn.Equals(_primaryKeyColumn, StringComparison.OrdinalIgnoreCase)
+            ? $"{sortColumn} {sortOrder}"
+            : $"{sortColumn} {sortOrder}, {_primaryKeyColumn} ASC";
 
         var query = $"""
                      SELECT * FROM {_tableName}
                      {whereClause}
-                     ORDER BY {sortColumn} {sortOrder}
+                     ORDER BY {orderBy}
                      LIMIT @PageSize OFFSET @Offset
                      """;
 
         parameters.Add("@Offset", offset);
         parameters.Add("@PageSize", filter.PageSize);
 
-        var items = (await connection.QueryAsync<T>(query, parameters, Transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(new CommandDefinition(query, parameters, Transaction, cancellationToken: cancellationToken))).ToList();
 
         return new PagedResult<T>(items, totalRecords, filter.PageNumber, filter.PageSize);
     }
 
-    public async Task<PagedResult<T>> SearchAsync(SearchParams searchParams)
+    public async Task<PagedResult<T>> SearchAsync(SearchParams searchParams, CancellationToken cancellationToken = default)
     {
-        var connection = await _connectionFactory.CreateConnectionAsync();
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
         using var owned = _ownsConnection ? connection : null;
 
         var ftsTable = $"{_tableName}FTS";
@@ -315,7 +398,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                           AND main.OrganisationId = @OrganisationId
                           """;
 
-        var totalRecords = await connection.ExecuteScalarAsync<int>(countQuery, parameters, Transaction);
+        var totalRecords = await connection.ExecuteScalarAsync<int>(new CommandDefinition(countQuery, parameters, Transaction, cancellationToken: cancellationToken));
 
         var searchQuery = $"""
                            SELECT main.*, bm25(fts) AS Relevance
@@ -328,7 +411,7 @@ public class GenericRepository<T, TDataType> : IGenericRepository<T, TDataType>
                            LIMIT @PageSize OFFSET @Offset
                            """;
 
-        var items = (await connection.QueryAsync<T>(searchQuery, parameters, Transaction)).ToList();
+        var items = (await connection.QueryAsync<T>(new CommandDefinition(searchQuery, parameters, Transaction, cancellationToken: cancellationToken))).ToList();
 
         return new PagedResult<T>(items, totalRecords, searchParams.PageNumber, searchParams.PageSize);
     }

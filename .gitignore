@@ -295,3 +295,4 @@ architecture-analysis/
 docs/adr/
 docs/agents/
 .scratch/
+GLOSSARY.md

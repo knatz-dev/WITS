@@ -62,6 +62,7 @@ public sealed class EndpointApiFixture : IAsyncLifetime
                 services.Replace(ServiceDescriptor.Scoped<IAuthService, StubAuthService>());
                 services.Replace(ServiceDescriptor.Scoped<ITicketService, StubTicketService>());
                 services.Replace(ServiceDescriptor.Scoped<IProjectService, StubProjectService>());
+services.Replace(ServiceDescriptor.Scoped<IProfileService, StubProfileService>());
             });
         });
 
@@ -125,12 +126,12 @@ internal sealed class StubTicketService : ITicketService
         DateResolved = new DateTime(2026, 10, 23, 10, 15, 0, DateTimeKind.Utc)
     });
 
-    public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) =>
+    public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, page, pageSize));
 
-    public Task<TicketResponse?> GetByIdAsync(long id) => Task.FromResult(id == Ticket.Id ? Ticket : null);
+    public Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult(id == Ticket.Id ? Ticket : null);
 
-    public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) =>
+    public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, filter.PageNumber, filter.PageSize));
 }
 
@@ -145,11 +146,24 @@ internal sealed class StubProjectService : IProjectService
         new DateTime(2026, 10, 23, 9, 30, 0, DateTimeKind.Utc),
         null);
 
-    public Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize) =>
+    public Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, page, pageSize));
 
-    public Task<ProjectResponse?> GetByIdAsync(long id) => Task.FromResult(id == Project.Id ? Project : null);
+    public Task<ProjectResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult(id == Project.Id ? Project : null);
 
-    public Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter) =>
+    public Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, filter.PageNumber, filter.PageSize));
+}
+
+internal sealed class StubProfileService : IProfileService
+{
+    private static readonly ProfileResponse Profile = new(1, "smoke", "smoke@example.com", "Smoke", "User", null, null, 1);
+
+    public Task<ProfileResponse?> GetAsync(long userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(userId == 1 ? Profile : null);
+
+    public Task<ProfileUpdateResult> UpdateAsync(long userId, UpdateProfileRequest request, CancellationToken cancellationToken = default) =>
+        Task.FromResult(userId == 1
+            ? new ProfileUpdateResult(true, Profile: Profile)
+            : new ProfileUpdateResult(false, NotFound: true));
 }

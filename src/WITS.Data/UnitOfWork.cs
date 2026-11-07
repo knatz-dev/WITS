@@ -23,7 +23,7 @@ public sealed class UnitOfWork : IUnitOfWork
     public UnitOfWork(IDbConnectionFactory connectionFactory)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
-        _connection = connectionFactory.CreateConnectionAsync().Result;
+        _connection = connectionFactory.CreateConnection();
 
         if (_connection.State != ConnectionState.Open)
         {

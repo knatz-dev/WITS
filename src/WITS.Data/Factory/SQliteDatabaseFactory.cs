@@ -17,15 +17,15 @@ public class SQliteDatabaseFactory
     public SQliteDatabaseFactory(SQliteConnectionFactory connectionFactory)
     {
         _connectionFactory = connectionFactory;
-        EnsureDatabase().Wait();
+        EnsureDatabase();
     }
 
-    private async Task EnsureDatabase()
+    private void EnsureDatabase()
     {
-        await CreateDatabaseFile();
+        CreateDatabaseFile();
     }
 
-    private async Task CreateDatabaseFile()
+    private void CreateDatabaseFile()
     {
         string databasePath = GetDatabasePath()
             ?? throw new InvalidOperationException("Database file path is missing.");
@@ -40,10 +40,8 @@ public class SQliteDatabaseFactory
 
         if (!File.Exists(databasePath))
         {
-            await using var file = File.Create(databasePath);
+            using var file = File.Create(databasePath);
         }
-
-        await Task.CompletedTask;
     }
 
     public async Task InitializeSchema(string initialSchema)

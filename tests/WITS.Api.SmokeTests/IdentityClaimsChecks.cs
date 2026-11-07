@@ -104,7 +104,7 @@ internal static class IdentityClaimsChecks
 
     internal sealed class StubUserRepository(User account) : IGenericRepository<User, long>
     {
-        public Task<PagedResult<User>> QueryAsync(GenericFilter filter)
+        public Task<PagedResult<User>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default)
         {
             var matches = filter.Filters is not null
                 && filter.Filters.TryGetValue("Username", out var criteria)
@@ -114,17 +114,17 @@ internal static class IdentityClaimsChecks
                 : new PagedResult<User>([], 0, filter.PageNumber, filter.PageSize));
         }
 
-        public Task<PagedResult<User>> GetAllAsync(int pageNumber = 1, int pageSize = 100) =>
+        public Task<PagedResult<User>> GetAllAsync(int pageNumber = 1, int pageSize = 100, CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
 
-        public Task<User?> GetByIdAsync(long id) => Task.FromResult(id == account.Id ? account : null);
+        public Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult(id == account.Id ? account : null);
 
-        public Task<int> InsertAsync(User model) => throw new NotImplementedException();
+        public Task<long> InsertAsync(User model, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-        public Task<bool> UpdateAsync(User model) => throw new NotImplementedException();
+        public Task<bool> UpdateAsync(User model, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-        public Task<bool> DeleteByIdAsync(long id) => throw new NotImplementedException();
+        public Task<bool> DeleteByIdAsync(long id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-        public Task<PagedResult<User>> SearchAsync(SearchParams searchParams) => throw new NotImplementedException();
+        public Task<PagedResult<User>> SearchAsync(SearchParams searchParams, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     }
 }

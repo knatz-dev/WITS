@@ -60,7 +60,7 @@ internal static class SchemaAlignmentChecks
             Require(user is { FullName: "Smoke User" }, "User must round-trip with its computed FullName.");
 
             var roles = unitOfWork.GetRepository<Role, short>();
-            var roleId = (short)await roles.InsertAsync(new Role
+            var roleId = await roles.InsertAsync(new Role
             {
                 Id = 0, Name = "Smoke role", Code = "SMOKE", Created = now
             });

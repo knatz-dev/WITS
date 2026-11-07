@@ -1,0 +1,23 @@
+name: Backend verification
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore
+        run: dotnet restore WITS.slnx
+      - name: Build
+        run: dotnet build WITS.slnx --no-restore
+      - name: Endpoint tests
+        run: dotnet test tests/WITS.Api.EndpointTests --no-build
+      - name: Smoke tests
+        run: dotnet run --project tests/WITS.Api.SmokeTests --no-build

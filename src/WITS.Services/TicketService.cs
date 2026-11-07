@@ -9,9 +9,9 @@ namespace WITS.Services;
 
 public interface ITicketService
 {
-    Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize);
-    Task<TicketResponse?> GetByIdAsync(long id);
-    Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter);
+    Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
+    Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default);
 }
 
 public class TicketService : ITicketService
@@ -23,21 +23,21 @@ public class TicketService : ITicketService
         _repository = unitOfWork.GetRepository<EntityTicket, long>();
     }
 
-    public async Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize)
+    public async Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var result = await _repository.GetAllAsync(page, pageSize);
+        var result = await _repository.GetAllAsync(page, pageSize, cancellationToken);
         return new PagedResult<TicketResponse>(result.Items.Select(ToResponse).ToList(), result.TotalRecords, result.PageNumber, result.PageSize);
     }
 
-    public async Task<TicketResponse?> GetByIdAsync(long id)
+    public async Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
-        var entity = await _repository.GetByIdAsync(id);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
         return entity is null ? null : ToResponse(entity);
     }
 
-    public async Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter)
+    public async Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default)
     {
-        var result = await _repository.QueryAsync(filter);
+        var result = await _repository.QueryAsync(filter, cancellationToken);
         return new PagedResult<TicketResponse>(result.Items.Select(ToResponse).ToList(), result.TotalRecords, result.PageNumber, result.PageSize);
     }
 
@@ -61,7 +61,7 @@ public class TicketService : ITicketService
             NextAction = string.Empty,
             Assignee = entity.AssignedToUserId,
             ReportedByUsername = string.Empty,
-            ProjectId = (int)entity.ProjectId,
+            ProjectId = entity.ProjectId,
             ProjectCode = string.Empty
         };
         return TicketResponse.From(model);

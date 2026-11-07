@@ -39,15 +39,15 @@ public class Routes : IEndpointDefinition
     }
 
     private static async Task<Ok<PagedResult<TicketResponse>>> QueryHandler(
-        ITicketService ticketService, [FromBody] GenericFilter filter)
+        ITicketService ticketService, [FromBody] GenericFilter filter, CancellationToken cancellationToken)
     {
-        return TypedResults.Ok(await ticketService.QueryAsync(filter));
+        return TypedResults.Ok(await ticketService.QueryAsync(filter, cancellationToken));
     }
 
     private static async Task<Results<Ok<TicketResponse>, ProblemHttpResult>> GetByIdHandler(
-        ITicketService ticketService, long id)
+        ITicketService ticketService, long id, CancellationToken cancellationToken)
     {
-        var ticket = await ticketService.GetByIdAsync(id);
+        var ticket = await ticketService.GetByIdAsync(id, cancellationToken);
         if (ticket is null)
         {
             return TypedResults.Problem(ApiErrors.NotFound($"Ticket {id} does not exist.", ApiErrorCodes.NotFound));
@@ -56,8 +56,8 @@ public class Routes : IEndpointDefinition
     }
 
     private static async Task<Ok<PagedResult<TicketResponse>>> GetAllHandler(
-        ITicketService ticketService, int page = 1, int pageSize = 100)
+        ITicketService ticketService, int page = 1, int pageSize = 100, CancellationToken cancellationToken = default)
     {
-        return TypedResults.Ok(await ticketService.GetAllAsync(page, pageSize));
+        return TypedResults.Ok(await ticketService.GetAllAsync(page, pageSize, cancellationToken));
     }
 }

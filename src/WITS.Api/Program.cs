@@ -174,6 +174,7 @@ builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericReposito
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
 
 WebApplication app = builder.Build();
 _ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;

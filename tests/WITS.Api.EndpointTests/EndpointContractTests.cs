@@ -118,7 +118,23 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             """{"refreshToken":"stub-refresh"}""", false, false, 204, null),
         new("logout rejects an unreadable body", "POST", "api/v1/auth/logout", "/api/v1/auth/logout",
             "{not-json", false, false, 400, "application/problem+json",
-            ExpectedCode: "invalid_request")
+            ExpectedCode: "invalid_request"),
+
+        new("health live returns healthy", "GET", "api/v1/health/live", "/api/v1/health/live",
+            null, false, false, 200, "application/json",
+            root => Assert.Equal("Healthy", root.GetProperty("status").GetString())),
+        new("health ready reports readiness", "GET", "api/v1/health/ready", "/api/v1/health/ready",
+            null, false, false, 503, null),
+        new("profile requires authentication", "GET", "api/v1/account/profile", "/api/v1/account/profile",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("profile returns the current account", "GET", "api/v1/account/profile", "/api/v1/account/profile",
+            null, true, true, 200, "application/json"),
+        new("profile update requires authentication", "PUT", "api/v1/account/profile", "/api/v1/account/profile",
+            """{"firstName":"Smoke","lastName":"User","rowVersion":1}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("profile update returns the account", "PUT", "api/v1/account/profile", "/api/v1/account/profile",
+            """{"firstName":"Smoke","lastName":"User","rowVersion":1}""", true, true, 200, "application/json")
     ];
 
     private readonly EndpointApiFixture _api;

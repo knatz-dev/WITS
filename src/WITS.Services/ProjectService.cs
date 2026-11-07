@@ -8,9 +8,9 @@ namespace WITS.Services;
 
 public interface IProjectService
 {
-    Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize);
-    Task<ProjectResponse?> GetByIdAsync(long id);
-    Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter);
+    Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<ProjectResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
+    Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default);
 }
 
 public class ProjectService : IProjectService
@@ -22,21 +22,21 @@ public class ProjectService : IProjectService
         _repository = unitOfWork.GetRepository<EntityProject, long>();
     }
 
-    public async Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize)
+    public async Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var result = await _repository.GetAllAsync(page, pageSize);
+        var result = await _repository.GetAllAsync(page, pageSize, cancellationToken);
         return new PagedResult<ProjectResponse>(result.Items.Select(ToResponse).ToList(), result.TotalRecords, result.PageNumber, result.PageSize);
     }
 
-    public async Task<ProjectResponse?> GetByIdAsync(long id)
+    public async Task<ProjectResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
-        var entity = await _repository.GetByIdAsync(id);
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
         return entity is null ? null : ToResponse(entity);
     }
 
-    public async Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter)
+    public async Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default)
     {
-        var result = await _repository.QueryAsync(filter);
+        var result = await _repository.QueryAsync(filter, cancellationToken);
         return new PagedResult<ProjectResponse>(result.Items.Select(ToResponse).ToList(), result.TotalRecords, result.PageNumber, result.PageSize);
     }
 

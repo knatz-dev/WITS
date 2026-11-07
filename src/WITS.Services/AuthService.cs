@@ -294,7 +294,7 @@ public class AuthService : IAuthService
 
         try
         {
-            int id = await _userRepository.InsertAsync(new User()
+            long id = await _userRepository.InsertAsync(new User()
             {
                 Id = 0,
                 Username = user.Username,

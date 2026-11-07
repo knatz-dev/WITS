@@ -189,7 +189,7 @@ internal static class OperationalSignalsChecks
 
     private sealed class ContendedTicketService(string connectionString) : ITicketService
     {
-        public async Task<TicketResponse?> GetByIdAsync(long id)
+        public async Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
         {
             if (id == 43) throw new SqliteException("Simulated SQLITE_LOCKED", 6);
             using var connection = new SqliteConnection(connectionString);
@@ -198,7 +198,7 @@ internal static class OperationalSignalsChecks
             throw new InvalidOperationException("The fixture command should have failed.");
         }
 
-        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize) => throw new NotSupportedException();
-        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter) => throw new NotSupportedException();
+        public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
