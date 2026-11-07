@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using WITS.Services;
 using WITS.Api.Common;
-using WITS.Models;
 using WITS.Common;
+using WITS.Models;
 
 namespace WITS.Api.Auth;
 

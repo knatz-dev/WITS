@@ -1,13 +1,8 @@
 using System.Security.Claims;
 
-namespace WITS.Api.Auth;
+using WITS.Common;
 
-public interface ICurrentUser
-{
-    long? UserId { get; }
-    int? OrganisationId { get; }
-    bool IsAuthenticated { get; }
-}
+namespace WITS.Api.Auth;
 
 public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {

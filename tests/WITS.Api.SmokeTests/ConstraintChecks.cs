@@ -133,6 +133,7 @@ internal static class ConstraintChecks
             await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
             await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE2', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
             await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE3', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
+            await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE4', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
         }
 
         var usernameRace = await Task.WhenAll(Enumerable.Range(0, 4)
@@ -147,9 +148,9 @@ internal static class ConstraintChecks
                 && emailRace.Where(result => !result.Success).All(result => result.Conflict),
             "Concurrent duplicate email addresses must produce one registration and predictable conflicts.");
 
-        var normalized = await RegisterAsync(connectionString, "  trimmed-user  ", "  trimmed@example.com  ", 1, "INVITE2");
-        Require(normalized.Success, "Registration must normalize surrounding whitespace.");
-        var duplicateNormalized = await RegisterAsync(connectionString, "trimmed-user", "other-trimmed@example.com", 1, "INVITE3");
+        var normalized = await RegisterAsync(connectionString, "  trimmed-user  ", "  trimmed@example.com  ", 1, "INVITE3");
+        Require(normalized.Success, $"Registration must normalize surrounding whitespace. {normalized.Message}");
+        var duplicateNormalized = await RegisterAsync(connectionString, "trimmed-user", "other-trimmed@example.com", 1, "INVITE4");
         Require(!duplicateNormalized.Success && duplicateNormalized.Conflict,
             "A normalized duplicate username must conflict.");
 
