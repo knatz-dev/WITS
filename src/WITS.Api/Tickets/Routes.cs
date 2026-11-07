@@ -36,6 +36,22 @@ public class Routes : IEndpointDefinition
                              + "Unknown filter fields, operators, sort columns or sort orders return 400; page size is 1-100.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized);
+
+        ticketsGroup.MapGet("type", TypesHandler)
+            .WithName("Get ticket types")
+            .WithSummary("List ticket types")
+            .Produces<IReadOnlyList<CatalogueItemResponse>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
+        ticketsGroup.MapGet("priority", PrioritiesHandler)
+            .WithName("Get ticket priorities")
+            .WithSummary("List ticket priorities")
+            .Produces<IReadOnlyList<CatalogueItemResponse>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
+        ticketsGroup.MapGet("status", StatusesHandler)
+            .WithName("Get ticket statuses")
+            .WithSummary("List ticket statuses")
+            .Produces<IReadOnlyList<CatalogueItemResponse>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
     }
 
     private static async Task<Ok<PagedResult<TicketResponse>>> QueryHandler(
@@ -60,4 +76,16 @@ public class Routes : IEndpointDefinition
     {
         return TypedResults.Ok(await ticketService.GetAllAsync(page, pageSize, cancellationToken));
     }
+
+    private static async Task<Ok<IReadOnlyList<CatalogueItemResponse>>> TypesHandler(
+        ITicketCatalogueService catalogueService, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await catalogueService.GetTypesAsync(cancellationToken));
+
+    private static async Task<Ok<IReadOnlyList<CatalogueItemResponse>>> PrioritiesHandler(
+        ITicketCatalogueService catalogueService, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await catalogueService.GetPrioritiesAsync(cancellationToken));
+
+    private static async Task<Ok<IReadOnlyList<CatalogueItemResponse>>> StatusesHandler(
+        ITicketCatalogueService catalogueService, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await catalogueService.GetStatusesAsync(cancellationToken));
 }

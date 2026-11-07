@@ -128,6 +128,13 @@ internal static class ConstraintChecks
 
     private static async Task CheckConcurrentRegistrationAsync(string connectionString)
     {
+        await using (var seedConnection = await OpenAsync(connectionString))
+        {
+            await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
+            await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE2', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
+            await ExecuteAsync(seedConnection, "INSERT INTO Invitations (OrganisationId, Code, CreatedByUserId, ExpiresAt, Created, IsDeleted, IsRevoked) VALUES (1, 'INVITE3', 0, '2099-01-01T00:00:00Z', CURRENT_TIMESTAMP, 0, 0);");
+        }
+
         var usernameRace = await Task.WhenAll(Enumerable.Range(0, 4)
             .Select(_ => RegisterAsync(connectionString, "race-user", "race@example.com", 1)));
         Require(usernameRace.Count(result => result.Success) == 1
@@ -135,27 +142,26 @@ internal static class ConstraintChecks
             "Concurrent duplicate usernames must produce one registration and predictable conflicts.");
 
         var emailRace = await Task.WhenAll(Enumerable.Range(0, 4)
-            .Select(index => RegisterAsync(connectionString, $"race-email-{index}", "race-email@example.com", 1)));
+            .Select(index => RegisterAsync(connectionString, $"race-email-{index}", "race-email@example.com", 1, "INVITE2")));
         Require(emailRace.Count(result => result.Success) == 1
                 && emailRace.Where(result => !result.Success).All(result => result.Conflict),
             "Concurrent duplicate email addresses must produce one registration and predictable conflicts.");
 
-        var normalized = await RegisterAsync(connectionString, "  trimmed-user  ", "  trimmed@example.com  ", 1);
+        var normalized = await RegisterAsync(connectionString, "  trimmed-user  ", "  trimmed@example.com  ", 1, "INVITE2");
         Require(normalized.Success, "Registration must normalize surrounding whitespace.");
-        var duplicateNormalized = await RegisterAsync(connectionString, "trimmed-user", "other-trimmed@example.com", 1);
+        var duplicateNormalized = await RegisterAsync(connectionString, "trimmed-user", "other-trimmed@example.com", 1, "INVITE3");
         Require(!duplicateNormalized.Success && duplicateNormalized.Conflict,
             "A normalized duplicate username must conflict.");
 
-        var invalidOrganisation = await RegisterAsync(connectionString, "no-organisation", "no-organisation@example.com", 999);
-        Require(!invalidOrganisation.Success && !invalidOrganisation.Conflict
-                && invalidOrganisation.Message == "Organisation does not exist.",
-            "Registration must reject an invalid organisation reference as a validation failure.");
+        var invalidOrganisation = await RegisterAsync(connectionString, "no-organisation", "no-organisation@example.com", 999, "INVALID");
+        Require(!invalidOrganisation.Success && invalidOrganisation.Conflict,
+            "Registration must reject an invalid invitation as a conflict.");
 
         var login = await ValidateAsync(connectionString, "  trimmed-user  ", Password);
         Require(login.Success, "Login must ignore surrounding username whitespace.");
     }
 
-    private static async Task<RegistrationResult> RegisterAsync(string connectionString, string username, string email, int organisationId)
+    private static async Task<RegistrationResult> RegisterAsync(string connectionString, string username, string email, int organisationId, string invitationCode = "INVITE")
     {
         using var unitOfWork = new UnitOfWork(new SQliteConnectionFactory(connectionString));
         return await CreateService(unitOfWork).RegisterUserAsync(new RegisterRequest
@@ -166,7 +172,8 @@ internal static class ConstraintChecks
             EmailAddress = email,
             OrganisationId = organisationId,
             Password = Password,
-            TelephoneNos = "000"
+            TelephoneNos = "000",
+            InvitationCode = invitationCode
         });
     }
 

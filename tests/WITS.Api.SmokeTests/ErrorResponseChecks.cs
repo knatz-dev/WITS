@@ -154,7 +154,8 @@ internal static class ErrorResponseChecks
         EmailAddress = $"{username}@example.com",
         OrganisationId = 1,
         Password = "password",
-        TelephoneNos = "000"
+        TelephoneNos = "000",
+        InvitationCode = "INVITE"
     };
 
     private static async Task ExpectProblemAsync(
@@ -206,10 +207,13 @@ internal static class ErrorResponseChecks
     public void RevokeRefreshToken(string refreshToken) { }
     public void RevokeAllRefreshTokens(long userId) { }
 
-        public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user) =>
+        public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default) =>
             Task.FromResult(user.Username == "duplicate"
                 ? new RegistrationResult(false, "Username already exists", Conflict: true)
                 : new RegistrationResult(false, "Password cannot be empty"));
+
+        public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PasswordChangeResult(false, Error: "Invalid password change."));
     }
 
     private sealed class StubTicketService : ITicketService

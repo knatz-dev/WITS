@@ -22,6 +22,8 @@ public class RegisterRequest
     public required string EmailAddress { get; set; }
     [Range(0, int.MaxValue)]
     public int OrganisationId { get; set; }
+    [Required, StringLength(128, MinimumLength = 1)]
+    public required string InvitationCode { get; set; }
     [Required, StringLength(1024, MinimumLength = 1)]
     public required string Password { get; set; }
     [Required, StringLength(64, MinimumLength = 1)]

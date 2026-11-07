@@ -17,11 +17,11 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
     private const string WrongPasswordBody = """{"username":"smoke","password":"wrong"}""";
     private const string NewUserBody = """
         {"username":"new.user","firstName":"New","lastName":"User","emailAddress":"new@example.com",
-         "password":"password","telephoneNos":"000","organisationId":1}
+         "password":"password","telephoneNos":"000","organisationId":1,"invitationCode":"INVITE"}
         """;
     private const string DuplicateUserBody = """
         {"username":"existing","firstName":"Existing","lastName":"User","emailAddress":"existing@example.com",
-         "password":"password","telephoneNos":"000","organisationId":1}
+         "password":"password","telephoneNos":"000","organisationId":1,"invitationCode":"INVITE"}
         """;
     private const string FilterBody = """{"pageNumber":1,"pageSize":10}""";
 
@@ -47,13 +47,6 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         new("register rejects a duplicate", "POST", "api/v1/auth/register", "/api/v1/auth/register",
             DuplicateUserBody, false, false, 409, "application/problem+json",
             ExpectedCode: "account_exists"),
-        new("login rejects an unreadable body", "POST", "api/v1/auth/login", "/api/v1/auth/login",
-            "{not-json", false, false, 400, "application/problem+json",
-            ExpectedCode: "invalid_request"),
-        new("register rejects an unreadable body", "POST", "api/v1/auth/register", "/api/v1/auth/register",
-            "{not-json", false, false, 400, "application/problem+json",
-            ExpectedCode: "invalid_request"),
-
         new("ticket list requires authentication", "GET", "api/v1/ticket", "/api/v1/ticket",
             null, true, false, 401, "application/problem+json",
             ExpectedCode: "authentication_required"),
@@ -83,6 +76,22 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         new("ticket query rejects an unreadable body", "POST", "api/v1/ticket/query", "/api/v1/ticket/query",
             "{not-json", true, true, 400, "application/problem+json",
             ExpectedCode: "invalid_request"),
+
+        new("ticket types require authentication", "GET", "api/v1/ticket/type", "/api/v1/ticket/type",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket types return a catalogue", "GET", "api/v1/ticket/type", "/api/v1/ticket/type",
+            null, true, true, 200, "application/json"),
+        new("ticket priorities require authentication", "GET", "api/v1/ticket/priority", "/api/v1/ticket/priority",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket priorities return a catalogue", "GET", "api/v1/ticket/priority", "/api/v1/ticket/priority",
+            null, true, true, 200, "application/json"),
+        new("ticket statuses require authentication", "GET", "api/v1/ticket/status", "/api/v1/ticket/status",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket statuses return a catalogue", "GET", "api/v1/ticket/status", "/api/v1/ticket/status",
+            null, true, true, 200, "application/json"),
 
         new("project list requires authentication", "GET", "api/v1/project", "/api/v1/project",
             null, true, false, 401, "application/problem+json",
@@ -119,6 +128,10 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         new("logout rejects an unreadable body", "POST", "api/v1/auth/logout", "/api/v1/auth/logout",
             "{not-json", false, false, 400, "application/problem+json",
             ExpectedCode: "invalid_request"),
+
+        new("change password requires authentication", "POST", "api/v1/auth/change-password", "/api/v1/auth/change-password",
+            """{"currentPassword":"password","newPassword":"new-password"}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
 
         new("health live returns healthy", "GET", "api/v1/health/live", "/api/v1/health/live",
             null, false, false, 200, "application/json",

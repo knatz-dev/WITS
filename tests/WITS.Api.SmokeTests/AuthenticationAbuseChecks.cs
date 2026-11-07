@@ -295,7 +295,7 @@ internal static class AuthenticationAbuseChecks
     private static RegisterRequest Registration() => new()
     {
         Username = "new-user", Password = Password, FirstName = "New", LastName = "User", EmailAddress = "new@example.com",
-        OrganisationId = 3, TelephoneNos = "000"
+        OrganisationId = 3, TelephoneNos = "000", InvitationCode = "INVITE"
     };
 
     private static void Require(bool condition, string message)
@@ -345,10 +345,13 @@ internal static class AuthenticationAbuseChecks
             return new CredentialResult(true, "test-token");
         }
 
-        public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
+        public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref _calls);
             return Task.FromResult(new RegistrationResult(true, "Registered"));
         }
+
+        public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PasswordChangeResult(true));
     }
 }

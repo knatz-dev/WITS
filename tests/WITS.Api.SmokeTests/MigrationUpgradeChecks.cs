@@ -184,7 +184,7 @@ internal static class MigrationUpgradeChecks
         var path = Path.Combine(directory, "forward-retry.db");
         var connectionString = ConnectionString(path);
         var migrations = MigrationRunner.GetMigrations().ToList();
-        foreach (var migration in migrations.Take(migrations.Count - 1))
+        foreach (var migration in migrations.Take(migrations.Count - 2))
         {
             migration.Apply(connectionString);
         }

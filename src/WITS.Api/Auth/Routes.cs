@@ -11,6 +11,7 @@ public record LoginRequest(string Username, string Password);
 public record LoginResponse(string? Token, string? RefreshToken, string? Message);
 public record RefreshRequest(string RefreshToken);
 public record LogoutRequest(string RefreshToken);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public class Routes : IEndpointDefinition
 {
@@ -52,6 +53,16 @@ public class Routes : IEndpointDefinition
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .AllowAnonymous();
+        authGroup.MapPost("change-password", ChangePasswordHandler)
+            .WithName("ChangePassword")
+            .WithSummary("Change the authenticated user's password")
+            .WithDescription("Requires the current password. Successful changes revoke all refresh tokens.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization();
     }
 
     private static async Task<Results<Ok<LoginResponse>, ProblemHttpResult>> LoginHandler(
@@ -99,8 +110,37 @@ public class Routes : IEndpointDefinition
         return TypedResults.NoContent();
     }
 
+    private static async Task<Results<NoContent, ProblemHttpResult>> ChangePasswordHandler(
+        IAuthService authService, ICurrentUser currentUser, [FromBody] ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not long userId)
+        {
+            return TypedResults.Problem(ApiErrors.Unauthorized("Authentication is required.", ApiErrorCodes.AuthenticationRequired));
+        }
+        if (request is null)
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Request body is required.", ApiErrorCodes.InvalidRequest));
+        }
+
+        var result = await authService.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword, cancellationToken);
+        if (result.NotFound)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Account does not exist.", ApiErrorCodes.NotFound));
+        }
+        if (result.Conflict)
+        {
+            return TypedResults.Problem(ApiErrors.Conflict("The account was changed by another request.", ApiErrorCodes.Conflict));
+        }
+        if (!result.Success)
+        {
+            return TypedResults.Problem(ApiErrors.Validation(result.Error ?? "Invalid password change.", ApiErrorCodes.ValidationFailed));
+        }
+
+        return TypedResults.NoContent();
+    }
+
     private static async Task<Results<Ok<RegisterResponse>, ProblemHttpResult>> RegisterHandler(
-        IAuthService authService, [FromBody] RegisterRequest request)
+        IAuthService authService, [FromBody] RegisterRequest request, CancellationToken cancellationToken)
     {
         if (request is null)
         {
@@ -119,7 +159,7 @@ public class Routes : IEndpointDefinition
             var detail = string.Join(" ", validationResults.Select(r => r.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
             return TypedResults.Problem(ApiErrors.Validation(string.IsNullOrWhiteSpace(detail) ? "Invalid registration request." : detail, ApiErrorCodes.ValidationFailed));
         }
-        var result = await authService.RegisterUserAsync(request);
+        var result = await authService.RegisterUserAsync(request, cancellationToken);
         if (!result.Success)
         {
             return result.Conflict

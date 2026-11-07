@@ -89,8 +89,15 @@ internal static class IdentityClaimsChecks
 
     internal sealed class StubUnitOfWork(User account) : IUnitOfWork
     {
-        public IGenericRepository<T, TId> GetRepository<T, TId>() where T : BaseEntity<TId> =>
-            (IGenericRepository<T, TId>)(object)new StubUserRepository(account);
+        public IGenericRepository<T, TId> GetRepository<T, TId>() where T : BaseEntity<TId>
+        {
+            if (typeof(T) == typeof(User))
+            {
+                return (IGenericRepository<T, TId>)(object)new StubUserRepository(account);
+            }
+
+            return (IGenericRepository<T, TId>)(object)new StubInvitationRepository();
+        }
 
         public void BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.Serializable) =>
             throw new NotSupportedException("The stub unit of work does not manage transactions.");
@@ -100,6 +107,19 @@ internal static class IdentityClaimsChecks
         public void Rollback() => throw new NotSupportedException("The stub unit of work does not manage transactions.");
 
         public void Dispose() => GC.SuppressFinalize(this);
+    }
+
+    internal sealed class StubInvitationRepository : IGenericRepository<Invitation, int>
+    {
+        public Task<PagedResult<Invitation>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PagedResult<Invitation>([], 0, filter.PageNumber, filter.PageSize));
+        public Task<PagedResult<Invitation>> GetAllAsync(int pageNumber = 1, int pageSize = 100, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+        public Task<Invitation?> GetByIdAsync(int id, CancellationToken cancellationToken = default) => Task.FromResult<Invitation?>(null);
+        public Task<int> InsertAsync(Invitation model, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<bool> UpdateAsync(Invitation model, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<bool> DeleteByIdAsync(int id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<PagedResult<Invitation>> SearchAsync(SearchParams searchParams, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     }
 
     internal sealed class StubUserRepository(User account) : IGenericRepository<User, long>

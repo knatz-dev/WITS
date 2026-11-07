@@ -3,6 +3,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,7 +64,8 @@ public sealed class EndpointApiFixture : IAsyncLifetime
                 services.Replace(ServiceDescriptor.Scoped<IAuthService, StubAuthService>());
                 services.Replace(ServiceDescriptor.Scoped<ITicketService, StubTicketService>());
                 services.Replace(ServiceDescriptor.Scoped<IProjectService, StubProjectService>());
-services.Replace(ServiceDescriptor.Scoped<IProfileService, StubProfileService>());
+                services.Replace(ServiceDescriptor.Scoped<ITicketCatalogueService, StubTicketCatalogueService>());
+                services.Replace(ServiceDescriptor.Scoped<IProfileService, StubProfileService>());
             });
         });
 
@@ -104,10 +107,13 @@ internal sealed class StubAuthService : IAuthService
     public void RevokeRefreshToken(string refreshToken) { }
     public void RevokeAllRefreshTokens(long userId) { }
 
-    public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user) =>
+    public Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default) =>
         Task.FromResult(user.Username == "existing"
             ? new RegistrationResult(false, "Username already exists", Conflict: true)
             : new RegistrationResult(true, "User registered successfully with id 17.", UserId: 17));
+
+    public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new PasswordChangeResult(true));
 }
 
 internal sealed class StubTicketService : ITicketService
@@ -153,6 +159,16 @@ internal sealed class StubProjectService : IProjectService
 
     public Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, filter.PageNumber, filter.PageSize));
+}
+
+internal sealed class StubTicketCatalogueService : ITicketCatalogueService
+{
+    public Task<IReadOnlyList<CatalogueItemResponse>> GetTypesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CatalogueItemResponse>>([new(1, "Bug")]);
+    public Task<IReadOnlyList<CatalogueItemResponse>> GetPrioritiesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CatalogueItemResponse>>([new(1, "High")]);
+    public Task<IReadOnlyList<CatalogueItemResponse>> GetStatusesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CatalogueItemResponse>>([new(1, "Open")]);
 }
 
 internal sealed class StubProfileService : IProfileService

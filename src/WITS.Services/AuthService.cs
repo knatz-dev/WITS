@@ -26,13 +26,15 @@ namespace WITS.Services;
 
 public record CredentialResult(bool Success, string? Token, string? RefreshToken = null, string Message = "");
 public record RegistrationResult(bool Success, string Message = "", bool Conflict = false, long? UserId = null);
+public record PasswordChangeResult(bool Success, bool NotFound = false, bool Conflict = false, string? Error = null);
 public record RefreshResult(bool Success, string? AccessToken, string? RefreshToken, string Message = "");
 
 public interface IAuthService
 {
     string GenerateToken(UserTokenModel userToken);
     Task<CredentialResult> ValidateCredentialsAsync(string username, string password);
-    Task<RegistrationResult> RegisterUserAsync(RegisterRequest user);
+    Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default);
+    Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
     Task<RefreshResult> RefreshAsync(string refreshToken);
     void RevokeRefreshToken(string refreshToken);
     void RevokeAllRefreshTokens(long userId);
@@ -44,6 +46,7 @@ public class AuthService : IAuthService
     private static readonly (string Hash, string Salt) DummyPassword =
         AuthHelper.HashPassword(Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
     private readonly IGenericRepository<User, long> _userRepository;
+    private readonly IGenericRepository<Invitation, int> _invitationRepository;
     private readonly JwtSettings _jwtSettings;
     private readonly ILogger<AuthService> _logger;
     private readonly LoginAttemptTracker _loginAttempts;
@@ -52,6 +55,7 @@ public class AuthService : IAuthService
     public AuthService(IUnitOfWork unitOfWork, IOptions<JwtSettings> jwtSettings, ILogger<AuthService> logger, LoginAttemptTracker loginAttempts, RefreshTokenStore refreshTokens)
     {
         _userRepository = unitOfWork.GetRepository<User, long>();
+        _invitationRepository = unitOfWork.GetRepository<Invitation, int>();
         _jwtSettings = jwtSettings.Value;
         _logger = logger;
         _loginAttempts = loginAttempts;
@@ -233,7 +237,40 @@ public class AuthService : IAuthService
 
     public void RevokeAllRefreshTokens(long userId) => _refreshTokens.RevokeAll(userId);
 
-    public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user)
+    public async Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword) || newPassword.Length > 1024)
+        {
+            return new PasswordChangeResult(false, Error: "Current and new passwords are required; new password must be at most 1024 characters.");
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null || user.IsDeleted)
+        {
+            return new PasswordChangeResult(false, NotFound: true);
+        }
+
+        if (!AuthHelper.VerifyPasswordHash(currentPassword, user.PasswordHash, user.PasswordSalt ?? string.Empty))
+        {
+            return new PasswordChangeResult(false, Error: "Current password is incorrect.");
+        }
+
+        var (hash, salt) = AuthHelper.HashPassword(newPassword);
+        user.PasswordHash = hash;
+        user.PasswordSalt = salt;
+        user.RowVersion = user.RowVersion <= 0 ? 1 : user.RowVersion;
+
+        var updated = await _userRepository.UpdateAsync(user, cancellationToken);
+        if (!updated)
+        {
+            return new PasswordChangeResult(false, Conflict: true);
+        }
+
+        _refreshTokens.RevokeAll(userId);
+        return new PasswordChangeResult(true);
+    }
+
+    public async Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default)
     {
         // Identifiers are global and stored without surrounding whitespace. The database
         // indexes below are case-insensitive; the reads here are only a friendly fast path.
@@ -289,6 +326,27 @@ public class AuthService : IAuthService
             return new RegistrationResult(false, "Email address already exists", Conflict: true);
         }
 
+        // Validate the invitation before creating the account.
+        var invitationFilter = new GenericFilter
+        {
+            PageNumber = 1,
+            PageSize = 1,
+            Filters = new Dictionary<string, FilterCriteria>
+            {
+                { "Code", new FilterCriteria(user.InvitationCode) }
+            }
+        };
+        var invitationResult = await _invitationRepository.QueryAsync(invitationFilter, cancellationToken);
+        var invitation = invitationResult.Items.FirstOrDefault();
+        if (invitation is null || invitation.IsDeleted || invitation.IsRevoked
+            || invitation.UsedByUserId is not null || invitation.ExpiresAt <= DateTime.UtcNow)
+        {
+            return new RegistrationResult(false, "Invalid or expired invitation.", Conflict: true);
+        }
+
+        // The invitation determines the organisation; caller-supplied organisation identifiers cannot override it.
+        user.OrganisationId = invitation.OrganisationId;
+
         // Hash password with salt
         var (hash, salt) = AuthHelper.HashPassword(user.Password);
 
@@ -309,6 +367,12 @@ public class AuthService : IAuthService
             });
             _logger.LogInformation("Registered user {Username} with id {UserId} after {ElapsedMs} ms",
                 user.Username, id, stopwatch.ElapsedMilliseconds);
+
+            invitation.UsedByUserId = id;
+            invitation.UsedAt = DateTime.UtcNow;
+            invitation.RowVersion = invitation.RowVersion <= 0 ? 1 : invitation.RowVersion;
+            await _invitationRepository.UpdateAsync(invitation, cancellationToken);
+
             return new RegistrationResult(true, $"User registered successfully with id {id}.", UserId: id);
         }
         catch (SqliteException exception) when (exception.SqliteExtendedErrorCode == 2067) // SQLITE_CONSTRAINT_UNIQUE
