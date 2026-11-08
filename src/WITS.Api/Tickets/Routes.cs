@@ -8,6 +8,10 @@ using WITS.Api.Common;
 
 namespace WITS.Api.Tickets;
 
+public record CreateTicketRequest(string Summary, string? Description, int TypeId, int PriorityId, int StatusId, long ProjectId, long? Assignee, DateTime? DueDate);
+public record UpdateTicketRequest(string Summary, string? Description, int TypeId, int PriorityId, int StatusId, long? Assignee, DateTime? DueDate, int RowVersion);
+public record AssignTicketRequest(long? Assignee, int RowVersion);
+
 [Authorize]
 public class Routes : IEndpointDefinition
 {
@@ -36,6 +40,36 @@ public class Routes : IEndpointDefinition
                              + "Unknown filter fields, operators, sort columns or sort orders return 400; page size is 1-100.")
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized);
+
+        ticketsGroup.MapPost("", CreateHandler)
+            .WithName("Create ticket")
+            .WithSummary("Create a ticket")
+            .Produces<TicketResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized);
+
+        ticketsGroup.MapPut("{id:long}", UpdateHandler)
+            .WithName("Update ticket")
+            .WithSummary("Update a ticket")
+            .Produces<TicketResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        ticketsGroup.MapDelete("{id:long}", DeleteHandler)
+            .WithName("Delete ticket")
+            .WithSummary("Soft-delete a ticket")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        ticketsGroup.MapPost("{id:long}/assign", AssignHandler)
+            .WithName("Assign ticket")
+            .WithSummary("Assign a ticket")
+            .Produces<TicketResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         ticketsGroup.MapGet("type", TypesHandler)
             .WithName("Get ticket types")
@@ -77,6 +111,23 @@ public class Routes : IEndpointDefinition
         return TypedResults.Ok(await ticketService.GetAllAsync(page, pageSize, cancellationToken));
     }
 
+    private static async Task<Results<Ok<TicketResponse>, ProblemHttpResult>> CreateHandler(
+        ITicketService ticketService, [FromBody] CreateTicketRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Summary))
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Ticket summary is required.", ApiErrorCodes.ValidationFailed));
+        }
+
+        var ticket = await ticketService.CreateAsync(request.Summary, request.Description, request.TypeId, request.PriorityId, request.StatusId, request.ProjectId, request.Assignee, request.DueDate, cancellationToken);
+        if (ticket is null)
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Ticket could not be created.", ApiErrorCodes.ValidationFailed));
+        }
+
+        return TypedResults.Ok(ticket);
+    }
+
     private static async Task<Ok<IReadOnlyList<CatalogueItemResponse>>> TypesHandler(
         ITicketCatalogueService catalogueService, CancellationToken cancellationToken) =>
         TypedResults.Ok(await catalogueService.GetTypesAsync(cancellationToken));
@@ -88,4 +139,50 @@ public class Routes : IEndpointDefinition
     private static async Task<Ok<IReadOnlyList<CatalogueItemResponse>>> StatusesHandler(
         ITicketCatalogueService catalogueService, CancellationToken cancellationToken) =>
         TypedResults.Ok(await catalogueService.GetStatusesAsync(cancellationToken));
+
+    private static async Task<Results<Ok<TicketResponse>, ProblemHttpResult>> UpdateHandler(
+        ITicketService ticketService, long id, [FromBody] UpdateTicketRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Summary))
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Ticket summary is required.", ApiErrorCodes.ValidationFailed));
+        }
+
+        var ticket = await ticketService.UpdateAsync(id, request.Summary, request.Description, request.TypeId, request.PriorityId, request.StatusId, request.Assignee, request.DueDate, request.RowVersion, cancellationToken);
+        if (ticket is null)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Ticket does not exist.", ApiErrorCodes.NotFound));
+        }
+
+        return TypedResults.Ok(ticket);
+    }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteHandler(
+        ITicketService ticketService, long id, CancellationToken cancellationToken)
+    {
+        var deleted = await ticketService.DeleteAsync(id, cancellationToken);
+        if (!deleted)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Ticket does not exist.", ApiErrorCodes.NotFound));
+        }
+
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<Results<Ok<TicketResponse>, ProblemHttpResult>> AssignHandler(
+        ITicketService ticketService, long id, [FromBody] AssignTicketRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            return TypedResults.Problem(ApiErrors.Validation("Request body is required.", ApiErrorCodes.InvalidRequest));
+        }
+
+        var ticket = await ticketService.AssignAsync(id, request.Assignee, request.RowVersion, cancellationToken);
+        if (ticket is null)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Ticket does not exist.", ApiErrorCodes.NotFound));
+        }
+
+        return TypedResults.Ok(ticket);
+    }
 }

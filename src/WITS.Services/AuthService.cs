@@ -35,6 +35,7 @@ public interface IAuthService
     Task<CredentialResult> ValidateCredentialsAsync(string username, string password);
     Task<RegistrationResult> RegisterUserAsync(RegisterRequest user, CancellationToken cancellationToken = default);
     Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
+    Task<bool> SetAccountLockedAsync(long userId, bool locked, CancellationToken cancellationToken = default);
     Task<RefreshResult> RefreshAsync(string refreshToken);
     void RevokeRefreshToken(string refreshToken);
     void RevokeAllRefreshTokens(long userId);
@@ -236,6 +237,24 @@ public class AuthService : IAuthService
     public void RevokeRefreshToken(string refreshToken) => _refreshTokens.Revoke(refreshToken);
 
     public void RevokeAllRefreshTokens(long userId) => _refreshTokens.RevokeAll(userId);
+
+    public async Task<bool> SetAccountLockedAsync(long userId, bool locked, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user is null || user.IsDeleted)
+        {
+            return false;
+        }
+
+        user.IsLocked = locked;
+        var updated = await _userRepository.UpdateAsync(user, cancellationToken);
+        if (updated && locked)
+        {
+            _refreshTokens.RevokeAll(userId);
+        }
+
+        return updated;
+    }
 
     public async Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default)
     {

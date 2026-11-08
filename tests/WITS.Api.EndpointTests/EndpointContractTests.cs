@@ -77,6 +77,12 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             "{not-json", true, true, 400, "application/problem+json",
             ExpectedCode: "invalid_request"),
 
+        new("ticket create requires authentication", "POST", "api/v1/ticket", "/api/v1/ticket",
+            """{"summary":"New ticket","typeId":1,"priorityId":1,"statusId":1,"projectId":1}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket create succeeds", "POST", "api/v1/ticket", "/api/v1/ticket",
+            """{"summary":"New ticket","typeId":1,"priorityId":1,"statusId":1,"projectId":1}""", true, true, 200, "application/json"),
+
         new("ticket types require authentication", "GET", "api/v1/ticket/type", "/api/v1/ticket/type",
             null, true, false, 401, "application/problem+json",
             ExpectedCode: "authentication_required"),
@@ -115,6 +121,30 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             "{not-json", true, true, 400, "application/problem+json",
             ExpectedCode: "invalid_request"),
 
+        new("project create requires authentication", "POST", "api/v1/project", "/api/v1/project",
+            """{"name":"New project"}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("project create succeeds", "POST", "api/v1/project", "/api/v1/project",
+            """{"name":"New project"}""", true, true, 200, "application/json"),
+        new("project update requires authentication", "PUT", "api/v1/project/{id:long}", "/api/v1/project/1",
+            """{"name":"Updated project"}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("project update reports a missing project", "PUT", "api/v1/project/{id:long}", "/api/v1/project/999",
+            """{"name":"Updated project"}""", true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+
+        new("project member add requires authentication", "POST", "api/v1/project/{id:long}/members", "/api/v1/project/1/members",
+            """{"userId":2}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("project member add succeeds", "POST", "api/v1/project/{id:long}/members", "/api/v1/project/1/members",
+            """{"userId":2}""", true, true, 204, null),
+        new("project member remove requires authentication", "DELETE", "api/v1/project/{id:long}/members/{userId:long}", "/api/v1/project/1/members/2",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("project member remove reports a missing membership", "DELETE", "api/v1/project/{id:long}/members/{userId:long}", "/api/v1/project/1/members/999",
+            null, true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+
         new("refresh issues tokens", "POST", "api/v1/auth/refresh", "/api/v1/auth/refresh",
             """{"refreshToken":"stub-refresh"}""", false, false, 200, "application/json",
             root => Assert.True(!string.IsNullOrEmpty(root.GetProperty("token").GetString())
@@ -131,6 +161,10 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
 
         new("change password requires authentication", "POST", "api/v1/auth/change-password", "/api/v1/auth/change-password",
             """{"currentPassword":"password","newPassword":"new-password"}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+
+        new("account lock requires authentication", "POST", "api/v1/auth/users/{id:long}/lock", "/api/v1/auth/users/1/lock",
+            """{"locked":true}""", true, false, 401, "application/problem+json",
             ExpectedCode: "authentication_required"),
 
         new("health live returns healthy", "GET", "api/v1/health/live", "/api/v1/health/live",
@@ -174,7 +208,8 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         var covered = Cases.Select(testCase => Key(testCase.Method, testCase.Route))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Empty(registered.Except(covered, StringComparer.OrdinalIgnoreCase));
+        var missing = registered.Except(covered, StringComparer.OrdinalIgnoreCase).ToList();
+        Assert.True(missing.Count == 0, "MISSING: " + string.Join(" | ", missing));
         Assert.Empty(covered.Except(registered, StringComparer.OrdinalIgnoreCase));
     }
 

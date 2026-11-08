@@ -214,6 +214,8 @@ internal static class ErrorResponseChecks
 
         public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PasswordChangeResult(false, Error: "Invalid password change."));
+        public Task<bool> SetAccountLockedAsync(long userId, bool locked, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
     }
 
     private sealed class StubTicketService : ITicketService
@@ -222,6 +224,15 @@ internal static class ErrorResponseChecks
             Task.FromResult(new PagedResult<TicketResponse>([], 0, page, pageSize));
 
         public Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult<TicketResponse?>(null);
+
+        public Task<TicketResponse?> CreateAsync(string summary, string? description, int typeId, int priorityId, int statusId, long projectId, long? assignee, DateTime? dueDate, CancellationToken cancellationToken = default) =>
+            Task.FromResult<TicketResponse?>(null);
+        public Task<TicketResponse?> UpdateAsync(long id, string summary, string? description, int typeId, int priorityId, int statusId, long? assignee, DateTime? dueDate, int rowVersion, CancellationToken cancellationToken = default) =>
+            Task.FromResult<TicketResponse?>(null);
+        public Task<TicketResponse?> AssignAsync(long id, long? assignee, int rowVersion, CancellationToken cancellationToken = default) =>
+            Task.FromResult<TicketResponse?>(null);
+        public Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
 
         public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PagedResult<TicketResponse>([], 0, 1, 100));

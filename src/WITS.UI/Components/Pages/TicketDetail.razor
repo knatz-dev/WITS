@@ -96,7 +96,7 @@ else
                 </div>
                 <div class="detail-row">
                     <dt>Resolved</dt>
-                    <dd>@(ticket.DateResolved == default ? "Not resolved" : ticket.DateResolved.ToString("yyyy-MM-dd"))</dd>
+                    <dd>@(ticket.DateResolved is null ? "Not resolved" : ticket.DateResolved.Value.ToString("yyyy-MM-dd"))</dd>
                 </div>
             </dl>
 

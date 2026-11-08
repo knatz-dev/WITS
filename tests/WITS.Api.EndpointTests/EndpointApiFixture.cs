@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
@@ -114,6 +116,8 @@ internal sealed class StubAuthService : IAuthService
 
     public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PasswordChangeResult(true));
+    public Task<bool> SetAccountLockedAsync(long userId, bool locked, CancellationToken cancellationToken = default) =>
+        Task.FromResult(true);
 }
 
 internal sealed class StubTicketService : ITicketService
@@ -137,6 +141,18 @@ internal sealed class StubTicketService : ITicketService
 
     public Task<TicketResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default) => Task.FromResult(id == Ticket.Id ? Ticket : null);
 
+    public Task<TicketResponse?> CreateAsync(string summary, string? description, int typeId, int priorityId, int statusId, long projectId, long? assignee, DateTime? dueDate, CancellationToken cancellationToken = default) =>
+        Task.FromResult<TicketResponse?>(Ticket);
+
+    public Task<TicketResponse?> UpdateAsync(long id, string summary, string? description, int typeId, int priorityId, int statusId, long? assignee, DateTime? dueDate, int rowVersion, CancellationToken cancellationToken = default) =>
+        Task.FromResult(id == Ticket.Id ? Ticket : null);
+
+    public Task<TicketResponse?> AssignAsync(long id, long? assignee, int rowVersion, CancellationToken cancellationToken = default) =>
+        Task.FromResult(id == Ticket.Id ? Ticket : null);
+
+    public Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(id == Ticket.Id);
+
     public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<TicketResponse>([Ticket], 1, filter.PageNumber, filter.PageSize));
 }
@@ -159,6 +175,18 @@ internal sealed class StubProjectService : IProjectService
 
     public Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PagedResult<ProjectResponse>([Project], 1, filter.PageNumber, filter.PageSize));
+
+    public Task<ProjectResponse?> CreateAsync(string name, string? description, CancellationToken cancellationToken = default) =>
+        Task.FromResult<ProjectResponse?>(Project);
+
+    public Task<ProjectResponse?> UpdateAsync(long id, string name, string? description, CancellationToken cancellationToken = default) =>
+        Task.FromResult(id == Project.Id ? Project : null);
+
+    public Task<bool> AddMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(true);
+
+    public Task<bool> RemoveMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(userId != 999);
 }
 
 internal sealed class StubTicketCatalogueService : ITicketCatalogueService

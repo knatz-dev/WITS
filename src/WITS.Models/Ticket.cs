@@ -11,7 +11,7 @@ public class Ticket
     public int TypeId { get; set; }
     public int StatusId { get; set; }
     public DateTime DateCreated { get; set; }
-    public DateTime DateResolved { get; set; }
+    public DateTime? DateResolved { get; set; }
     public int PriorityId { get; set; }
     public required string LoggedByUsername { get; set; }
     public required string Reference { get; set; }
@@ -36,15 +36,11 @@ public sealed record TicketResponse(
     int StatusId,
     int PriorityId,
     DateTime DateCreated,
-    DateTime DateResolved,
-    string LoggedByUsername,
+    DateTime? DateResolved,
     string ReportedByUsername,
     long? Assignee,
-    string? ContactEmail,
-    string? Details,
     long ProjectId,
-    string ProjectCode,
-    string NextAction)
+    string ProjectCode)
 {
     public static TicketResponse From(Ticket ticket) => new(
         ticket.Id,
@@ -57,12 +53,8 @@ public sealed record TicketResponse(
         ticket.PriorityId,
         ticket.DateCreated,
         ticket.DateResolved,
-        ticket.LoggedByUsername,
         ticket.ReportedByUsername,
         ticket.Assignee,
-        ticket.ContactEmail,
-        ticket.Details,
         ticket.ProjectId,
-        ticket.ProjectCode,
-        ticket.NextAction);
+        ticket.ProjectCode);
 }

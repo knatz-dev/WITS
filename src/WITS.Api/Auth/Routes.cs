@@ -12,6 +12,7 @@ public record LoginResponse(string? Token, string? RefreshToken, string? Message
 public record RefreshRequest(string RefreshToken);
 public record LogoutRequest(string RefreshToken);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+public record SetAccountLockedRequest(bool Locked);
 
 public class Routes : IEndpointDefinition
 {
@@ -62,6 +63,13 @@ public class Routes : IEndpointDefinition
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .RequireAuthorization();
+        authGroup.MapPost("users/{id:long}/lock", SetAccountLockedHandler)
+            .WithName("SetAccountLocked")
+            .WithSummary("Lock or unlock an account")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .RequireAuthorization();
     }
 
@@ -167,5 +175,18 @@ public class Routes : IEndpointDefinition
                 : TypedResults.Problem(ApiErrors.Validation(result.Message, ApiErrorCodes.ValidationFailed));
         }
         return TypedResults.Ok(new RegisterResponse(result.UserId ?? 0, request.Username, request.EmailAddress));
+    }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> SetAccountLockedHandler(
+        IAuthService authService, long id, [FromBody] SetAccountLockedRequest request, CancellationToken cancellationToken)
+    {
+        var locked = request?.Locked ?? false;
+        var updated = await authService.SetAccountLockedAsync(id, locked, cancellationToken);
+        if (!updated)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Account does not exist.", ApiErrorCodes.NotFound));
+        }
+
+        return TypedResults.NoContent();
     }
 }

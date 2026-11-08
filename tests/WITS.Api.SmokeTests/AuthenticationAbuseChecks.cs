@@ -353,5 +353,7 @@ internal static class AuthenticationAbuseChecks
 
         public Task<PasswordChangeResult> ChangePasswordAsync(long userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default) =>
             Task.FromResult(new PasswordChangeResult(true));
+        public Task<bool> SetAccountLockedAsync(long userId, bool locked, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
     }
 }

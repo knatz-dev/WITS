@@ -94,7 +94,7 @@ builder.Services.AddAuthenticationRateLimits();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddSingleton<RefreshTokenStore>();
-builder.Services.AddSingleton<IPermissionService, InMemoryPermissionService>();
+builder.Services.AddSingleton<IPermissionService, PersistentPermissionService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi("v1", options =>

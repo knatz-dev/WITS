@@ -1,7 +1,9 @@
 using System.Reflection;
+using Dapper;
 using WITS.Common;
 using WITS.Data;
 using WITS.Data.Contracts;
+using WITS.Data.Entity;
 using EntityProject = WITS.Data.Entity.Project;
 using WITS.Models;
 
@@ -12,18 +14,22 @@ public interface IProjectService
     Task<PagedResult<ProjectResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     Task<ProjectResponse?> GetByIdAsync(long id, CancellationToken cancellationToken = default);
     Task<PagedResult<ProjectResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default);
+    Task<ProjectResponse?> CreateAsync(string name, string? description, CancellationToken cancellationToken = default);
+    Task<ProjectResponse?> UpdateAsync(long id, string name, string? description, CancellationToken cancellationToken = default);
+    Task<bool> AddMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default);
+    Task<bool> RemoveMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default);
 }
 
 public class ProjectService : IProjectService
 {
     private readonly IGenericRepository<EntityProject, long> _repository;
-    private readonly IGenericRepository<WITS.Data.Entity.ProjectMember, Guid> _members;
+    private readonly IDbConnectionFactory _connectionFactory;
     private readonly ICurrentUser _currentUser;
 
-    public ProjectService(IUnitOfWork unitOfWork, ICurrentUser currentUser)
+    public ProjectService(IUnitOfWork unitOfWork, IDbConnectionFactory connectionFactory, ICurrentUser currentUser)
     {
         _repository = unitOfWork.GetRepository<EntityProject, long>();
-        _members = unitOfWork.GetRepository<WITS.Data.Entity.ProjectMember, Guid>();
+        _connectionFactory = connectionFactory;
         _currentUser = currentUser;
     }
 
@@ -102,6 +108,97 @@ public class ProjectService : IProjectService
         return new PagedResult<ProjectResponse>(paged, total, filter.PageNumber, filter.PageSize);
     }
 
+    public async Task<ProjectResponse?> CreateAsync(string name, string? description, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 256)
+        {
+            return null;
+        }
+
+        var userId = _currentUser.UserId;
+        var organisationId = _currentUser.OrganisationId;
+        if (userId is null || organisationId is null)
+        {
+            return null;
+        }
+
+        var project = new EntityProject
+        {
+            Id = 0,
+            Name = name.Trim(),
+            Description = description?.Trim(),
+            OrganizationId = organisationId.Value,
+            CreatedByUserId = userId.Value,
+            Created = DateTime.UtcNow
+        };
+
+        var id = await _repository.InsertAsync(project, cancellationToken);
+        project.Id = id;
+        return ToResponse(project);
+    }
+
+    public async Task<ProjectResponse?> UpdateAsync(long id, string name, string? description, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 256)
+        {
+            return null;
+        }
+
+        var allowed = await GetAllowedProjectIdsAsync(cancellationToken);
+        if (allowed.Count > 0 && !allowed.Contains(id))
+        {
+            return null;
+        }
+
+        if (allowed.Count == 0)
+        {
+            return null;
+        }
+
+        var entity = await _repository.GetByIdAsync(id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Name = name.Trim();
+        entity.Description = description?.Trim();
+        var updated = await _repository.UpdateAsync(entity, cancellationToken);
+        if (!updated)
+        {
+            return null;
+        }
+
+        return ToResponse(entity);
+    }
+
+    public async Task<bool> AddMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+        try
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                "INSERT OR IGNORE INTO ProjectMembers (ProjectId, UserId, Role) VALUES (@ProjectId, @UserId, 'Member');",
+                new { ProjectId = projectId, UserId = userId },
+                cancellationToken: cancellationToken));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+        var rows = await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM ProjectMembers WHERE ProjectId = @ProjectId AND UserId = @UserId;",
+            new { ProjectId = projectId, UserId = userId },
+            cancellationToken: cancellationToken));
+        return rows > 0;
+    }
+
     private async Task<HashSet<long>> GetAllowedProjectIdsAsync(CancellationToken cancellationToken)
     {
         var userId = _currentUser.UserId;
@@ -111,10 +208,12 @@ public class ProjectService : IProjectService
             return allowed;
         }
 
-        var memberships = await _members.GetAllAsync(1, 100, cancellationToken);
-        foreach (var membership in memberships.Items.Where(member => member.UserId == userId.Value))
+        using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
+        var membershipProjectIds = await connection.QueryAsync<long>(
+            new CommandDefinition("SELECT ProjectId FROM ProjectMembers WHERE UserId = @UserId;", new { UserId = userId.Value }, cancellationToken: cancellationToken));
+        foreach (var projectId in membershipProjectIds)
         {
-            allowed.Add(membership.ProjectId);
+            allowed.Add(projectId);
         }
 
         var projects = await _repository.GetAllAsync(1, 100, cancellationToken);
