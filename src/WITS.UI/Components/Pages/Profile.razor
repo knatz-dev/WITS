@@ -1,0 +1,106 @@
+@page "/profile"
+@inject WitsApiClient Api
+@inject AuthSession Session
+
+<PageTitle>Profile</PageTitle>
+
+<h1>My profile</h1>
+
+@if (!Session.IsAuthenticated)
+{
+    <p>You must log in to view your profile.</p>
+}
+else if (profile is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <EditForm Model="editModel" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <div class="mb-3">
+            <label class="form-label">First name</label>
+            <InputText class="form-control" @bind-Value="editModel.FirstName" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Last name</label>
+            <InputText class="form-control" @bind-Value="editModel.LastName" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Phone number</label>
+            <InputText class="form-control" @bind-Value="editModel.PhoneNumber" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Picture URL</label>
+            <InputText class="form-control" @bind-Value="editModel.PictureUrl" />
+        </div>
+        <button class="btn btn-primary" type="submit" disabled="@saving">Save</button>
+    </EditForm>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-info mt-3">@message</div>
+    }
+}
+
+@code {
+    private ProfileResponse? profile;
+    private EditModel editModel = new();
+    private bool saving;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated)
+        {
+            profile = await Api.GetProfileAsync();
+            if (profile is not null)
+            {
+                editModel = new EditModel
+                {
+                    FirstName = profile.FirstName,
+                    LastName = profile.LastName,
+                    PhoneNumber = profile.PhoneNumber,
+                    PictureUrl = profile.PictureUrl,
+                    RowVersion = profile.RowVersion
+                };
+            }
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (profile is null)
+        {
+            return;
+        }
+
+        saving = true;
+        message = null;
+        try
+        {
+            ProfileResponse updated = await Api.UpdateProfileAsync(new UpdateProfileRequest(
+                editModel.FirstName, editModel.LastName, editModel.PhoneNumber, editModel.PictureUrl, editModel.RowVersion));
+            profile = updated;
+            editModel.RowVersion = updated.RowVersion;
+            message = "Profile updated.";
+        }
+        catch (Exception exception)
+        {
+            message = exception.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class EditModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string? PictureUrl { get; set; }
+        public int RowVersion { get; set; }
+    }
+}

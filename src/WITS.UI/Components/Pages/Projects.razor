@@ -1,0 +1,83 @@
+@page "/projects"
+@inject WitsApiClient Api
+@inject AuthSession Session
+
+<PageTitle>Projects</PageTitle>
+
+<h1>Projects</h1>
+
+@if (!Session.IsAuthenticated)
+{
+    <p>You must log in to view projects.</p>
+}
+else
+{
+    <div class="mb-3">
+        <input class="form-control" placeholder="New project name" @bind="newName" />
+        <button class="btn btn-primary mt-2" @onclick="CreateAsync" disabled="@creating">Create</button>
+    </div>
+
+    @if (projects is null)
+    {
+        <p>Loading…</p>
+    }
+    else if (projects.Items.Count == 0)
+    {
+        <p>No projects.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (Project project in projects.Items)
+            {
+                <li class="list-group-item">@project.Name</li>
+            }
+        </ul>
+    }
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-info mt-3">@message</div>
+    }
+}
+
+@code {
+    private PagedResult<Project>? projects;
+    private string newName = string.Empty;
+    private bool creating;
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated)
+        {
+            projects = await Api.GetProjectsAsync(1, 100);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        creating = true;
+        message = null;
+        try
+        {
+            Project created = await Api.CreateProjectAsync(newName, null);
+            message = $"Created {created.Name}.";
+            projects = await Api.GetProjectsAsync(1, 100);
+            newName = string.Empty;
+        }
+        catch (Exception exception)
+        {
+            message = exception.Message;
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+}

@@ -187,6 +187,9 @@ internal sealed class StubProjectService : IProjectService
 
     public Task<bool> RemoveMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default) =>
         Task.FromResult(userId != 999);
+
+    public Task<bool> RetireAsync(long projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(projectId == Project.Id);
 }
 
 internal sealed class StubTicketCatalogueService : ITicketCatalogueService

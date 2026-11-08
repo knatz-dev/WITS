@@ -63,6 +63,13 @@ public class Routes : IEndpointDefinition
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapDelete("{id:long}", RetireHandler)
+            .WithName("Retire project")
+            .WithSummary("Soft-delete a project")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
     private static async Task<Ok<PagedResult<ProjectResponse>>> GetAllHandler(
@@ -142,6 +149,18 @@ public class Routes : IEndpointDefinition
         if (!removed)
         {
             return TypedResults.Problem(ApiErrors.NotFound("Membership does not exist.", ApiErrorCodes.NotFound));
+        }
+
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> RetireHandler(
+        IProjectService service, long id, CancellationToken cancellationToken)
+    {
+        var retired = await service.RetireAsync(id, cancellationToken);
+        if (!retired)
+        {
+            return TypedResults.Problem(ApiErrors.NotFound("Project does not exist.", ApiErrorCodes.NotFound));
         }
 
         return TypedResults.NoContent();

@@ -83,6 +83,25 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         new("ticket create succeeds", "POST", "api/v1/ticket", "/api/v1/ticket",
             """{"summary":"New ticket","typeId":1,"priorityId":1,"statusId":1,"projectId":1}""", true, true, 200, "application/json"),
 
+        new("ticket update requires authentication", "PUT", "api/v1/ticket/{id:long}", "/api/v1/ticket/1",
+            """{"summary":"Updated","typeId":1,"priorityId":1,"statusId":1,"rowVersion":1}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket update reports a missing ticket", "PUT", "api/v1/ticket/{id:long}", "/api/v1/ticket/999",
+            """{"summary":"Updated","typeId":1,"priorityId":1,"statusId":1,"rowVersion":1}""", true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+        new("ticket delete requires authentication", "DELETE", "api/v1/ticket/{id:long}", "/api/v1/ticket/1",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket delete reports a missing ticket", "DELETE", "api/v1/ticket/{id:long}", "/api/v1/ticket/999",
+            null, true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+        new("ticket assign requires authentication", "POST", "api/v1/ticket/{id:long}/assign", "/api/v1/ticket/1/assign",
+            """{"assignee":2,"rowVersion":1}""", true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("ticket assign reports a missing ticket", "POST", "api/v1/ticket/{id:long}/assign", "/api/v1/ticket/999/assign",
+            """{"assignee":2,"rowVersion":1}""", true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+
         new("ticket types require authentication", "GET", "api/v1/ticket/type", "/api/v1/ticket/type",
             null, true, false, 401, "application/problem+json",
             ExpectedCode: "authentication_required"),
@@ -131,6 +150,13 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
             ExpectedCode: "authentication_required"),
         new("project update reports a missing project", "PUT", "api/v1/project/{id:long}", "/api/v1/project/999",
             """{"name":"Updated project"}""", true, true, 404, "application/problem+json",
+            ExpectedCode: "not_found"),
+
+        new("project retire requires authentication", "DELETE", "api/v1/project/{id:long}", "/api/v1/project/1",
+            null, true, false, 401, "application/problem+json",
+            ExpectedCode: "authentication_required"),
+        new("project retire reports a missing project", "DELETE", "api/v1/project/{id:long}", "/api/v1/project/999",
+            null, true, true, 404, "application/problem+json",
             ExpectedCode: "not_found"),
 
         new("project member add requires authentication", "POST", "api/v1/project/{id:long}/members", "/api/v1/project/1/members",
@@ -208,8 +234,7 @@ public sealed class EndpointContractTests : IClassFixture<EndpointApiFixture>
         var covered = Cases.Select(testCase => Key(testCase.Method, testCase.Route))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var missing = registered.Except(covered, StringComparer.OrdinalIgnoreCase).ToList();
-        Assert.True(missing.Count == 0, "MISSING: " + string.Join(" | ", missing));
+        Assert.Empty(registered.Except(covered, StringComparer.OrdinalIgnoreCase));
         Assert.Empty(covered.Except(registered, StringComparer.OrdinalIgnoreCase));
     }
 

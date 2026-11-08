@@ -201,6 +201,12 @@ internal static class OperationalSignalsChecks
         public Task<PagedResult<TicketResponse>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<TicketResponse?> CreateAsync(string summary, string? description, int typeId, int priorityId, int statusId, long projectId, long? assignee, DateTime? dueDate, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+        public Task<TicketResponse?> UpdateAsync(long id, string summary, string? description, int typeId, int priorityId, int statusId, long? assignee, DateTime? dueDate, int rowVersion, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<TicketResponse?> AssignAsync(long id, long? assignee, int rowVersion, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<PagedResult<TicketResponse>> QueryAsync(GenericFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

@@ -64,6 +64,64 @@ public class WitsApiClient(HttpClient http, AuthSession session)
         return await response.Content.ReadFromJsonAsync<Ticket>(cancellationToken);
     }
 
+    public async Task<ProfileResponse?> GetProfileAsync(CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await SendAsync("api/v1/account/profile", cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateExceptionAsync(response, cancellationToken);
+        }
+        return await response.Content.ReadFromJsonAsync<ProfileResponse>(cancellationToken);
+    }
+
+    public async Task<ProfileResponse> UpdateProfileAsync(UpdateProfileRequest request, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await SendJsonAsync(HttpMethod.Put, "api/v1/account/profile", request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateExceptionAsync(response, cancellationToken);
+        }
+        return await response.Content.ReadFromJsonAsync<ProfileResponse>(cancellationToken)
+            ?? throw new WitsApiException("The API did not return a profile.");
+    }
+
+    public async Task<PagedResult<Project>> GetProjectsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await SendAsync($"api/v1/project?page={page}&pageSize={pageSize}", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateExceptionAsync(response, cancellationToken);
+        }
+        return await response.Content.ReadFromJsonAsync<PagedResult<Project>>(cancellationToken)
+            ?? new PagedResult<Project>([], 0, page, pageSize);
+    }
+
+    public async Task<Project> CreateProjectAsync(string name, string? description, CancellationToken cancellationToken = default)
+    {
+        using HttpResponseMessage response = await SendJsonAsync(HttpMethod.Post, "api/v1/project", new { name, description }, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateExceptionAsync(response, cancellationToken);
+        }
+        return await response.Content.ReadFromJsonAsync<Project>(cancellationToken)
+            ?? throw new WitsApiException("The API did not return a project.");
+    }
+
+    private Task<HttpResponseMessage> SendJsonAsync(HttpMethod method, string uri, object body, CancellationToken cancellationToken)
+    {
+        HttpRequestMessage request = new(method, uri);
+        request.Content = JsonContent.Create(body);
+        if (session.Token is { } token)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http.SendAsync(request, cancellationToken);
+    }
+
     private Task<HttpResponseMessage> SendAsync(string uri, CancellationToken cancellationToken)
     {
         HttpRequestMessage request = new(HttpMethod.Get, uri);

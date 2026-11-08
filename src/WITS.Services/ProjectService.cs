@@ -18,6 +18,7 @@ public interface IProjectService
     Task<ProjectResponse?> UpdateAsync(long id, string name, string? description, CancellationToken cancellationToken = default);
     Task<bool> AddMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default);
     Task<bool> RemoveMemberAsync(long projectId, long userId, CancellationToken cancellationToken = default);
+    Task<bool> RetireAsync(long projectId, CancellationToken cancellationToken = default);
 }
 
 public class ProjectService : IProjectService
@@ -197,6 +198,22 @@ public class ProjectService : IProjectService
             new { ProjectId = projectId, UserId = userId },
             cancellationToken: cancellationToken));
         return rows > 0;
+    }
+
+    public async Task<bool> RetireAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var allowed = await GetAllowedProjectIdsAsync(cancellationToken);
+        if (allowed.Count > 0 && !allowed.Contains(projectId))
+        {
+            return false;
+        }
+
+        if (allowed.Count == 0)
+        {
+            return false;
+        }
+
+        return await _repository.DeleteByIdAsync(projectId, cancellationToken);
     }
 
     private async Task<HashSet<long>> GetAllowedProjectIdsAsync(CancellationToken cancellationToken)
